@@ -232,8 +232,21 @@ st.markdown("""
 @st.cache_resource
 def load_model():
     """Load the trained model (cache invalidates when metadata changes)"""
-    # Check if model exists
+    # Check if model pkl files exist
+    model_pkl = os.path.join(config.MODELS_DIR, 'home_score_ensemble.pkl')
     metadata_path = os.path.join(config.MODELS_DIR, 'model_metadata.json')
+    
+    # If models don't exist, train them first
+    if not os.path.exists(model_pkl):
+        st.info("🔄 First time setup: Training model... This may take a few minutes.")
+        try:
+            import train_model
+            train_model.main()
+            st.success("✅ Model trained successfully!")
+        except Exception as e:
+            st.error(f"Training failed: {e}")
+            return None
+    
     if not os.path.exists(metadata_path):
         return None
     
