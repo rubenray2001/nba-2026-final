@@ -1,0 +1,29 @@
+# Secrets (never commit)
+.streamlit/secrets.toml
+config.py
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Model data (too large for git)
+data/*.csv
+models/*.pkl
+models/*.joblib
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+deploy_log*.txt
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+venv
+.venv
+
+# IDE
+.idea
+.vscode
+
+# Test files
+test_*.py
+
+# Misc
+*.md
+!README.md
+catboost_info/

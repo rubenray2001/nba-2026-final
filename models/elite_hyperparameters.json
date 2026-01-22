@@ -1,0 +1,34 @@
+{
+  "xgb_reg": {
+    "subsample": 0.6,
+    "reg_lambda": 1,
+    "reg_alpha": 10,
+    "n_estimators": 300,
+    "min_child_weight": 7,
+    "max_depth": 3,
+    "learning_rate": 0.03,
+    "gamma": 0.1,
+    "colsample_bytree": 0.6
+  },
+  "cb_reg": {
+    "random_strength": 1,
+    "depth": 6,
+    "learning_rate": 0.05,
+    "l2_leaf_reg": 5
+  },
+  "xgb_class": {
+    "subsample": 0.6,
+    "n_estimators": 500,
+    "min_child_weight": 5,
+    "max_depth": 3,
+    "learning_rate": 0.01,
+    "gamma": 0,
+    "colsample_bytree": 1.0
+  },
+  "cb_class": {
+    "random_strength": 1,
+    "depth": 4,
+    "learning_rate": 0.1,
+    "l2_leaf_reg": 1
+  }
+}

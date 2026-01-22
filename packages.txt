@@ -1,0 +1,3 @@
+# System packages for Streamlit Cloud
+# (if needed for lightgbm/xgboost compilation)
+libgomp1
