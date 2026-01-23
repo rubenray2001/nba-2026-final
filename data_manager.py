@@ -412,7 +412,6 @@ class DataManager:
         cache_path = self._get_cache_path(f"team_averages_{season}")
         
         if self._is_cache_valid(cache_path, expiry_hours=168):  # 1 week
-            print(f"Loading team averages from cache")
             return pd.read_csv(cache_path)
         
         print(f"Fetching team season averages for {season}")

@@ -2,6 +2,10 @@
 Streamlit App - Elite NBA Predictions
 Beautiful UI matching user's design specifications
 """
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+
 import streamlit as st
 import pandas as pd
 import numpy as np

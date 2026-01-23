@@ -1,6 +1,10 @@
 """
 Training script - Train the elite ensemble model
 """
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+
 from data_manager import DataManager
 from features import FeatureEngineer
 # Use regularized model to avoid sklearn version issues and overfitting
