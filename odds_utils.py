@@ -158,6 +158,8 @@ def get_odds_features(odds_df: pd.DataFrame, game_id: int) -> Dict:
 
 def format_american_odds(odds: float) -> str:
     """Format odds as American style (+150 or -150)"""
+    if pd.isna(odds) or odds is None:
+        return "N/A"
     if odds > 0:
         return f"+{int(odds)}"
     return f"{int(odds)}"
