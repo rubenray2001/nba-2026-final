@@ -1,45 +1,47 @@
-from data_manager import data_manager
+
 import pandas as pd
+import numpy as np
+from model_engine import model
 
-def test_fix():
-    print("Testing NBA API Backfill Fix on Season 2015...")
+def verify():
+    print("Loading model...")
+    model.load_models()
     
-    # Force refresh implies fetching from BDL then attempting backfill
-    # This ensures we exercise the new code path
-    df = data_manager.fetch_historical_games(seasons=[2015], force_refresh=True)
+    print("Model loaded. Feature count:", len(model.feature_names))
     
-    print(f"Total games fetched: {len(df)}")
+    # Create a dummy feature row
+    features = pd.DataFrame(np.zeros((1, len(model.feature_names))), columns=model.feature_names)
     
-    if df.empty:
-        print("Error: No games fetched.")
-        return
-
-    # Check for missing scores
-    missing = df[(df['status'] == 'Final') & (df['home_team_score'] == 0) & (df['visitor_team_score'] == 0)]
-    missing_count = len(missing)
+    # Set reasonable values
+    features['elo_diff'] = 100 
+    features['home_elo'] = 1600
+    features['visitor_elo'] = 1500
+    features['home_win_pct_last10'] = 0.8
+    features['visitor_win_pct_last10'] = 0.2
     
-    print(f"Remaining 0-0 valid games: {missing_count}")
+    # Critical: Add points so model sees a good team vs bad team
+    features['home_points_scored_last10'] = 118.0
+    features['visitor_points_scored_last10'] = 102.0
+    features['home_points_allowed_last10'] = 105.0
+    features['visitor_points_allowed_last10'] = 115.0
     
-    if missing_count == 0:
-        print("SUCCESS! All games have scores.")
-        
-        # Spot check our favorite 2015 game: CLE @ CHI, 2015-10-27
-        # Note: BDL Dates are ISO strings
-        date_mask = df['date'].astype(str).str.contains("2015-10-27")
-        cle_mask = df['home_team_abbreviation'] == 'CHI' # CHI was home in the boxscore printed earlier? Or CLE?
-        # In test_nba_api output: MATCHUP: CLE @ CHI. Usually @ means Home. So CHI is Home.
-        # Let's check matching
-        
-        spot_check = df[date_mask]
-        if not spot_check.empty:
-            print("\nSpot Check (2015-10-27):")
-            print(spot_check[['date', 'home_team_name', 'home_team_score', 'visitor_team_name', 'visitor_team_score']])
-        else:
-            print("Warning: Could not find 2015-10-27 game for spot check.")
-            
+    # Net Rating Diff approx
+    features['net_rating_diff'] = 13.0 - (-13.0) # 26.0
+    
+    # Remove unicode print to avoid crash
+    print("\nRunning Prediction...")
+    pred = model.predict(features)
+    
+    print("\nPrediction Result:")
+    print(pred.iloc[0])
+    
+    prob = pred.iloc[0]['home_win_probability']
+    print(f"\nHome Win Probability: {prob:.4f}")
+    
+    if prob > 0.6:
+        print("SUCCESS: Model correctly favors the strong home team.")
     else:
-        print("FAILURE: Some games still have 0-0 scores.")
-        print(missing[['date', 'home_team_name', 'visitor_team_name']].head())
+        print("WARNING: Model did not strongly favor the home team (prob < 0.6).")
 
 if __name__ == "__main__":
-    test_fix()
+    verify()

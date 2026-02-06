@@ -40,6 +40,9 @@ def get_consensus_odds(odds_df: pd.DataFrame, game_id: int, preferred_vendors: l
     
     for col in numeric_cols:
         if col in game_odds.columns:
+            # Clean string values (remove quotes if present)
+            if game_odds[col].dtype == object:
+                game_odds[col] = game_odds[col].astype(str).str.replace('"', '').str.replace("'", "")
             game_odds.loc[:, col] = pd.to_numeric(game_odds[col], errors='coerce')
     
     # Calculate consensus (average across vendors)
@@ -85,7 +88,7 @@ def moneyline_to_probability(moneyline: float) -> float:
     Returns:
         Probability between 0 and 1
     """
-    if pd.isna(moneyline):
+    if pd.isna(moneyline) or moneyline == 0:
         return 0.5
     
     if moneyline < 0:
@@ -108,6 +111,9 @@ def probability_to_moneyline(probability: float) -> int:
     Returns:
         American moneyline odds
     """
+    # Clamp to avoid division by zero at extremes
+    probability = max(0.01, min(0.99, probability))
+    
     if probability >= 0.5:
         # Favorite
         ml = -(probability / (1 - probability)) * 100

@@ -24,8 +24,15 @@ class DataManager:
         """Get path for cache file"""
         return os.path.join(self.data_dir, f"{cache_name}.csv")
     
-    def _is_cache_valid(self, cache_path: str, expiry_hours: int = None) -> bool:
-        """Check if cache file exists and is not expired"""
+    def _is_cache_valid(self, cache_path: str, expiry_hours: int = None, 
+                        required_cols: list = None) -> bool:
+        """Check if cache file exists, is not expired, and has required columns.
+        
+        Args:
+            cache_path: Path to cache CSV
+            expiry_hours: Max age in hours before cache is stale
+            required_cols: Optional list of columns that must exist in cached data
+        """
         if not os.path.exists(cache_path):
             return False
         
@@ -35,6 +42,18 @@ class DataManager:
         file_modified = datetime.fromtimestamp(os.path.getmtime(cache_path))
         if datetime.now() - file_modified > timedelta(hours=expiry_hours):
             return False
+        
+        # Validate data integrity: check required columns exist and data isn't empty
+        if required_cols:
+            try:
+                # Read just the header to check columns efficiently
+                header_df = pd.read_csv(cache_path, nrows=0)
+                missing = [c for c in required_cols if c not in header_df.columns]
+                if missing:
+                    print(f"Cache {cache_path} missing columns {missing[:5]}... - busting cache")
+                    return False
+            except Exception:
+                return False
         
         return True
     
@@ -48,9 +67,20 @@ class DataManager:
         """
         cache_path = self._get_cache_path("games_historical")
         
-        if not force_refresh and self._is_cache_valid(cache_path, expiry_hours=720):  # 30 days for historical
+        # Required columns for valid historical data (including advanced stats)
+        required_historical_cols = [
+            'home_team_id', 'visitor_team_id', 'home_team_score', 'visitor_team_score',
+            'home_fgm', 'home_fga', 'home_oreb', 'home_tov',
+            'visitor_fgm', 'visitor_fga', 'visitor_oreb', 'visitor_tov'
+        ]
+        if not force_refresh and self._is_cache_valid(cache_path, expiry_hours=720, 
+                                                       required_cols=required_historical_cols):
             print(f"Loading games from cache: {cache_path}")
-            return pd.read_csv(cache_path, low_memory=False)
+            df = pd.read_csv(cache_path, low_memory=False)
+            # Additional integrity check: ensure advanced stats aren't all zeros
+            if 'home_fgm' in df.columns and (df['home_fgm'] == 0).mean() > 0.5:
+                print(f"WARNING: >50% of games missing advanced stats in cache. Consider force_refresh=True.")
+            return df
         
         print(f"Fetching games for seasons: {seasons}")
         all_games = []
@@ -164,9 +194,108 @@ class DataManager:
                 print(f"Warning: {missing_stats} games missing advanced stats (likely name mismatch).")
 
 
+            # Backfill missing scores using box_scores endpoint
+            missing_scores_mask = (
+                (df['home_team_score'] == 0) | (df['visitor_team_score'] == 0) |
+                df['home_team_score'].isna() | df['visitor_team_score'].isna()
+            )
+            if missing_scores_mask.sum() > 0:
+                print(f"Detected {missing_scores_mask.sum()} games with missing scores. Attempting backfill via box_scores...")
+                df = self._enrich_from_box_scores(df)
+
+            
             df.to_csv(cache_path, index=False)
             print(f"Saved {len(df)} games to cache")
         
+        return df
+
+    def _enrich_from_box_scores(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Fetch box scores for games with missing scores and aggregate player stats.
+        This fixes the data starvation issue for historical games (2000-2015).
+        """
+        import time
+        
+        # Identify dates with missing scores
+        missing_mask = (df['home_team_score'] == 0) | (df['visitor_team_score'] == 0) | df['home_team_score'].isna() | df['visitor_team_score'].isna()
+        dates_to_check = pd.to_datetime(df[missing_mask]['date'], errors='coerce').dt.strftime('%Y-%m-%d').dropna().unique()
+        
+        print(f"Backfilling scores for {len(dates_to_check)} dates...")
+        
+        updates_count = 0
+        
+        # Process in batches to avoid overwhelming (though client handles rate limits)
+        for date_str in dates_to_check:
+            print(f"  Backfilling {date_str}...")
+            
+            try:
+                # Fetch all box scores for this date
+                box_scores = self.client.get_box_scores(dates=[date_str])
+                
+                # Group by game_id
+                game_groups = {}
+                for record in box_scores:
+                    gid = record.get('game', {}).get('id')
+                    if gid:
+                        if gid not in game_groups:
+                            game_groups[gid] = []
+                        game_groups[gid].append(record)
+                
+                # Update dataframe
+                for gid, records in game_groups.items():
+                    # Find game in our dataframe
+                    idx = df[df['id'] == gid].index
+                    if len(idx) == 0:
+                        continue
+                        
+                    idx = idx[0]
+                    home_id = df.at[idx, 'home_team_id']
+                    visitor_id = df.at[idx, 'visitor_team_id']
+                    
+                    # Aggregate stats
+                    h_pts, v_pts = 0, 0
+                    h_stats = {'fgm':0, 'fga':0, 'fg3m':0, 'ftm':0, 'fta':0, 'oreb':0, 'dreb':0, 'tov':0, 'stl':0, 'blk':0, 'pf':0}
+                    v_stats = {'fgm':0, 'fga':0, 'fg3m':0, 'ftm':0, 'fta':0, 'oreb':0, 'dreb':0, 'tov':0, 'stl':0, 'blk':0, 'pf':0}
+                    
+                    for r in records:
+                        tid = r.get('team', {}).get('id')
+                        pts = r.get('pts') or 0
+                        
+                        # safely get other stats
+                        def get_val(k): return r.get(k) or 0
+                        
+                        stats_delta = {
+                            'fgm': get_val('fgm'), 'fga': get_val('fga'), 'fg3m': get_val('fg3m'),
+                            'ftm': get_val('ftm'), 'fta': get_val('fta'), 
+                            'oreb': get_val('oreb'), 'dreb': get_val('dreb'),
+                            'tov': get_val('turnover'), 'stl': get_val('stl'), 'blk': get_val('blk'), 'pf': get_val('pf')
+                        }
+                        
+                        if tid == home_id:
+                            h_pts += pts
+                            for k, v in stats_delta.items(): h_stats[k] += v
+                        elif tid == visitor_id:
+                            v_pts += pts
+                            for k, v in stats_delta.items(): v_stats[k] += v
+                    
+                    # Update DataFrame if we found data
+                    if h_pts > 0 or v_pts > 0:
+                        df.at[idx, 'home_team_score'] = h_pts
+                        df.at[idx, 'visitor_team_score'] = v_pts
+                        
+                        # Update advanced stat columns (if they are 0)
+                        # We use a simple check: if fgm is 0, we assume advanced stats are missing
+                        if df.at[idx, 'home_fgm'] == 0:
+                            for k, v in h_stats.items(): df.at[idx, f'home_{k}'] = v
+                        if df.at[idx, 'visitor_fgm'] == 0:
+                            for k, v in v_stats.items(): df.at[idx, f'visitor_{k}'] = v
+                            
+                        updates_count += 1
+                        
+            except Exception as e:
+                print(f"Error backfilling {date_str}: {e}")
+                
+        print(f"Backfill complete. Updated {updates_count} games.")
         return df
     
     def fetch_todays_games(self, target_date: str = None) -> pd.DataFrame:
@@ -272,7 +401,18 @@ class DataManager:
                     print(f"   The Odds API error: {e}")
         
         # Return BallDontLie results (even if incomplete)
-        return df_bdl if not df_bdl.empty else pd.DataFrame()
+        if not df_bdl.empty:
+            return df_bdl
+            
+        # No odds available from any source - return empty DataFrame.
+        # Mock odds were removed because random fake data pollutes the model
+        # when used in training. The model's smart NaN defaults (vegas_has_odds=0,
+        # vegas_spread=0, vegas_total=220, vegas_implied_prob=0.5) handle missing
+        # odds correctly as neutral signals.
+        if games_df is not None and not games_df.empty:
+            print(f"   No odds available for {len(games_df)} games. Model will use neutral defaults.")
+
+        return pd.DataFrame()
     
     def fetch_advanced_stats(self, seasons: List[int], force_refresh: bool = False) -> pd.DataFrame:
         """Fetch advanced statistics for seasons"""

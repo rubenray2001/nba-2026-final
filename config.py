@@ -7,7 +7,7 @@ import os
 try:
     import streamlit as st
     _secrets = st.secrets.get("api_keys", {})
-except:
+except Exception:
     _secrets = {}
 
 # API Configuration (Streamlit Cloud secrets > Environment vars > Defaults)
@@ -21,14 +21,17 @@ ODDS_API_KEY = _secrets.get("ODDS_API_KEY", os.environ.get("ODDS_API_KEY", "a3dd
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
 
 # Data Configuration
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
 CACHE_EXPIRY_HOURS = 24
 
 # Season Configuration
-START_SEASON = 2005
+START_SEASON = 2020
 END_SEASON = 2026
-TRAINING_SEASONS = list(range(2000, 2027))  # Training from 2000 to 2026
+# FIX: Use full history as requested by user
+# We now have backfilled data for older seasons
+TRAINING_SEASONS = list(range(2000, 2027))
 VALIDATION_SEASON = 2025
 
 # Model Configuration

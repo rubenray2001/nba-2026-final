@@ -63,6 +63,220 @@ class TheOddsAPIClient:
             print(f"The Odds API request failed: {e}")
             return []
     
+    def get_player_props(self, markets: str = None) -> List[Dict]:
+        """
+        Get NBA player props from The Odds API
+        
+        Player props require querying individual events via /events/{eventId}/odds endpoint.
+        
+        Args:
+            markets: Comma-separated player prop markets. Defaults to common props.
+                     Available: player_points, player_rebounds, player_assists, 
+                     player_threes, player_points_rebounds_assists, player_double_double
+        
+        Returns:
+            List of player props with format:
+            {
+                'game': 'Team A vs Team B',
+                'player': 'Player Name',
+                'prop_type': 'points',
+                'line': 25.5,
+                'over_odds': -110,
+                'under_odds': -110,
+                'bookmaker': 'draftkings'
+            }
+        """
+        if markets is None:
+            # All available NBA player prop markets
+            markets = ",".join([
+                "player_points",
+                "player_rebounds", 
+                "player_assists",
+                "player_threes",
+                "player_points_rebounds_assists",
+                "player_double_double",
+                "player_blocks",
+                "player_steals",
+                "player_turnovers"
+            ])
+        
+        # Step 1: Get list of events (games)
+        self._rate_limit()
+        events_url = f"{self.base_url}/sports/{self.sport}/events"
+        
+        try:
+            response = self.session.get(events_url, params={"apiKey": self.api_key})
+            response.raise_for_status()
+            events = response.json()
+            
+            if 'x-requests-remaining' in response.headers:
+                remaining = response.headers['x-requests-remaining']
+                print(f"   The Odds API (Events) - Requests remaining: {remaining}")
+            
+        except requests.exceptions.RequestException as e:
+            print(f"The Odds API events request failed: {e}")
+            return []
+        
+        if not events:
+            print("No NBA events found")
+            return []
+        
+        # Step 2: Query each event for player props (limit to first 3 to save API calls)
+        all_props = []
+        for event in events[:3]:  # Limit to 3 games to conserve API quota
+            event_id = event.get('id')
+            if not event_id:
+                continue
+            
+            self._rate_limit()
+            event_odds_url = f"{self.base_url}/sports/{self.sport}/events/{event_id}/odds"
+            
+            params = {
+                "apiKey": self.api_key,
+                "regions": "us",
+                "markets": markets,
+                "oddsFormat": "american"
+            }
+            
+            try:
+                response = self.session.get(event_odds_url, params=params)
+                response.raise_for_status()
+                event_data = response.json()
+                
+                if 'x-requests-remaining' in response.headers:
+                    remaining = response.headers['x-requests-remaining']
+                    print(f"   The Odds API (Props for {event.get('home_team', 'game')}) - Requests remaining: {remaining}")
+                
+                # Parse props from this event
+                props = self._parse_event_props(event_data)
+                all_props.extend(props)
+                
+            except requests.exceptions.RequestException as e:
+                print(f"Props request failed for event {event_id}: {e}")
+                continue
+        
+        return all_props
+    
+    def _parse_event_props(self, event_data: Dict) -> List[Dict]:
+        """Parse player props from a single event response"""
+        props = []
+        
+        # Map market keys to friendly names
+        market_names = {
+            'player_points': 'Points',
+            'player_rebounds': 'Rebounds', 
+            'player_assists': 'Assists',
+            'player_threes': '3-Pointers',
+            'player_points_rebounds_assists': 'PRA',
+            'player_double_double': 'Double-Double',
+            'player_blocks': 'Blocks',
+            'player_steals': 'Steals',
+            'player_turnovers': 'Turnovers'
+        }
+        
+        game_name = f"{event_data.get('away_team', '')} @ {event_data.get('home_team', '')}"
+        commence_time = event_data.get('commence_time', '')
+        
+        for bookmaker in event_data.get('bookmakers', []):
+            book_name = bookmaker.get('key', 'unknown')
+            
+            for market in bookmaker.get('markets', []):
+                market_key = market.get('key', '')
+                prop_type = market_names.get(market_key, market_key)
+                
+                # Player props have outcomes with 'description' (player name) and 'name' (Over/Under)
+                outcomes = market.get('outcomes', [])
+                
+                # Group by player (description field)
+                player_outcomes = {}
+                for outcome in outcomes:
+                    player = outcome.get('description', '')
+                    if not player:
+                        continue
+                    
+                    if player not in player_outcomes:
+                        player_outcomes[player] = {'line': outcome.get('point')}
+                    
+                    if outcome.get('name') == 'Over':
+                        player_outcomes[player]['over_odds'] = outcome.get('price')
+                    elif outcome.get('name') == 'Under':
+                        player_outcomes[player]['under_odds'] = outcome.get('price')
+                
+                # Create prop entries
+                for player, data in player_outcomes.items():
+                    if data.get('line') is not None:
+                        props.append({
+                            'game': game_name,
+                            'commence_time': commence_time,
+                            'player': player,
+                            'prop_type': prop_type,
+                            'line': data['line'],
+                            'over_odds': data.get('over_odds'),
+                            'under_odds': data.get('under_odds'),
+                            'bookmaker': book_name
+                        })
+        
+        return props
+    
+    def _parse_player_props(self, raw_data: List[Dict]) -> List[Dict]:
+        """Parse raw API response into structured player props"""
+        props = []
+        
+        # Map market keys to friendly names
+        market_names = {
+            'player_points': 'Points',
+            'player_rebounds': 'Rebounds', 
+            'player_assists': 'Assists',
+            'player_threes': '3-Pointers',
+            'player_points_rebounds_assists': 'PRA',
+            'player_double_double': 'Double-Double'
+        }
+        
+        for game in raw_data:
+            game_name = f"{game.get('away_team', '')} @ {game.get('home_team', '')}"
+            commence_time = game.get('commence_time', '')
+            
+            for bookmaker in game.get('bookmakers', []):
+                book_name = bookmaker.get('key', 'unknown')
+                
+                for market in bookmaker.get('markets', []):
+                    market_key = market.get('key', '')
+                    prop_type = market_names.get(market_key, market_key)
+                    
+                    # Player props have outcomes with 'description' (player name) and 'name' (Over/Under)
+                    outcomes = market.get('outcomes', [])
+                    
+                    # Group by player (description field)
+                    player_outcomes = {}
+                    for outcome in outcomes:
+                        player = outcome.get('description', '')
+                        if not player:
+                            continue
+                        
+                        if player not in player_outcomes:
+                            player_outcomes[player] = {'line': outcome.get('point')}
+                        
+                        if outcome.get('name') == 'Over':
+                            player_outcomes[player]['over_odds'] = outcome.get('price')
+                        elif outcome.get('name') == 'Under':
+                            player_outcomes[player]['under_odds'] = outcome.get('price')
+                    
+                    # Create prop entries
+                    for player, data in player_outcomes.items():
+                        if data.get('line') is not None:
+                            props.append({
+                                'game': game_name,
+                                'commence_time': commence_time,
+                                'player': player,
+                                'prop_type': prop_type,
+                                'line': data['line'],
+                                'over_odds': data.get('over_odds'),
+                                'under_odds': data.get('under_odds'),
+                                'bookmaker': book_name
+                            })
+        
+        return props
+    
     def convert_to_balldontlie_format(self, odds_data: List[Dict], team_name_mapping: Dict = None) -> List[Dict]:
         """
         Convert The Odds API format to BallDontLie format for compatibility

@@ -21,7 +21,7 @@ class TrainingHistoryTracker:
             try:
                 with open(self.history_file, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError):
                 return []
         return []
     

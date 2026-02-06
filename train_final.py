@@ -29,7 +29,19 @@ def load_data():
     exclude = ['game_id', 'date', 'home_team_id', 'visitor_team_id', 
                'home_score', 'visitor_score', 'home_won', 'season']
     feature_cols = [c for c in df.columns if c not in exclude]
-    X = df[feature_cols].fillna(0).select_dtypes(include=[np.number])
+    # Smart NaN filling
+    fill_defaults = {}
+    for col in feature_cols:
+        if 'elo' in col.lower(): fill_defaults[col] = 1500
+        elif 'win_pct' in col.lower() or 'prob' in col.lower(): fill_defaults[col] = 0.5
+        elif 'efg_pct' in col.lower(): fill_defaults[col] = 0.54
+        elif 'points_scored' in col.lower() or 'points_allowed' in col.lower(): fill_defaults[col] = 110
+        elif 'pace' in col.lower(): fill_defaults[col] = 98
+        elif 'rest_days' in col.lower(): fill_defaults[col] = 2
+        elif 'vegas_total' in col.lower(): fill_defaults[col] = 220.0
+        elif 'vegas_implied' in col.lower(): fill_defaults[col] = 0.5
+        else: fill_defaults[col] = 0
+    X = df[feature_cols].fillna(fill_defaults).select_dtypes(include=[np.number])
     return X, df['home_won'], df['home_score'], df['visitor_score'], list(X.columns)
 
 def train():
@@ -40,16 +52,17 @@ def train():
     X, y, y_home, y_vis, features = load_data()
     print(f"Samples: {len(X)}, Features: {len(features)}")
     
-    # Scale
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X.values)
-    
     # Split
-    split = int(len(X_scaled) * 0.8)
-    X_tr, X_te = X_scaled[:split], X_scaled[split:]
+    split = int(len(X) * 0.8)
+    X_tr_raw, X_te_raw = X.values[:split], X.values[split:]
     y_tr, y_te = y.values[:split], y.values[split:]
     y_h_tr, y_h_te = y_home.values[:split], y_home.values[split:]
     y_v_tr, y_v_te = y_vis.values[:split], y_vis.values[split:]
+    
+    # Scale (Fit on Train ONLY to avoid leakage)
+    scaler = StandardScaler()
+    X_tr = scaler.fit_transform(X_tr_raw)
+    X_te = scaler.transform(X_te_raw)
     
     print(f"Train: {len(X_tr)}, Test: {len(X_te)}")
     
