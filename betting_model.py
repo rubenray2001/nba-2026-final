@@ -123,8 +123,8 @@ class BettingModel:
         # Same rationale as model_engine.py: model was trained on zero Vegas,
         # so we blend raw model output with Vegas implied probabilities.
         # =====================================================================
-        VEGAS_WEIGHT = 0.55
-        MODEL_WEIGHT = 0.45
+        VEGAS_WEIGHT = 0.70
+        MODEL_WEIGHT = 0.30
         
         # Extract Vegas features from input
         vegas_implied = features_df.get('vegas_implied_home_prob', pd.Series([0.5] * len(features_df), index=features_df.index)).fillna(0.5).values
@@ -157,7 +157,7 @@ class BettingModel:
         
         blended_spread = np.where(
             vegas_has_odds > 0,
-            VEGAS_WEIGHT * vegas_spread_implied + MODEL_WEIGHT * raw_spread_probs,
+            0.65 * vegas_spread_implied + 0.35 * raw_spread_probs,
             raw_spread_probs
         )
         blended_spread = np.clip(blended_spread, 0.05, 0.95)

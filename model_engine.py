@@ -466,15 +466,15 @@ class EliteEnsembleModel:
         # The model adds value via ELO, rest, injuries, H2H, momentum.
         #
         # Blending weights:
-        #   - Winner prob: 55% Vegas implied + 45% model (Vegas is more calibrated)
+        #   - Winner prob: 70% Vegas implied + 30% model (Vegas is far more calibrated)
         #   - Scores: Use Vegas total as anchor, model spread for direction
-        #   - Spread: 60% Vegas + 40% model (Vegas spread is very accurate)
+        #   - Spread: 75% Vegas + 25% model (Vegas spread is very accurate)
         # =====================================================================
         
-        VEGAS_PROB_WEIGHT = 0.55
-        MODEL_PROB_WEIGHT = 0.45
-        VEGAS_SPREAD_WEIGHT = 0.60
-        MODEL_SPREAD_WEIGHT = 0.40
+        VEGAS_PROB_WEIGHT = 0.70
+        MODEL_PROB_WEIGHT = 0.30
+        VEGAS_SPREAD_WEIGHT = 0.75
+        MODEL_SPREAD_WEIGHT = 0.25
         
         # Extract Vegas features from the input (they're in features_df)
         vegas_implied = features_df.get('vegas_implied_home_prob', pd.Series([0.5] * len(features_df), index=features_df.index))
@@ -508,7 +508,7 @@ class EliteEnsembleModel:
         # Blend scores: Use Vegas total for magnitude, blended spread for direction
         blended_total = np.where(
             vegas_has_odds.values > 0,
-            0.55 * vegas_total.values + 0.45 * (raw_home_scores + raw_visitor_scores),
+            0.70 * vegas_total.values + 0.30 * (raw_home_scores + raw_visitor_scores),
             raw_home_scores + raw_visitor_scores
         )
         blended_home_scores = (blended_total + blended_spread) / 2
