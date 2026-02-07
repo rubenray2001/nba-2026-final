@@ -256,21 +256,28 @@ class EnhancedFeatureEngineer(FeatureEngineer):
                 ml_home = pd.to_numeric(game_odds['moneyline_home_odds'], errors='coerce').median()
                 ml_away = pd.to_numeric(game_odds['moneyline_away_odds'], errors='coerce').median()
                 
-                # Calculate implied probability
-                if pd.notna(ml_home):
+                # Calculate implied probability from moneyline
+                # Filter out garbage moneyline values (API sometimes returns -199900 etc.)
+                if pd.notna(ml_home) and abs(ml_home) <= 5000:
                     if ml_home < 0:
                         implied_prob = abs(ml_home) / (abs(ml_home) + 100)
                     else:
                         implied_prob = 100 / (ml_home + 100)
+                elif pd.notna(spread_home):
+                    # Fallback: estimate from spread (each point ~ 3% shift)
+                    implied_prob = 0.5 + (-spread_home * 0.03)
                 else:
                     implied_prob = 0.5
+                
+                # Clamp to realistic range (no team is >95% or <5% to win)
+                implied_prob = max(0.05, min(0.95, implied_prob))
                 
                 vegas_features.append({
                     'vegas_spread_home': spread_home if pd.notna(spread_home) else 0.0,
                     'vegas_total': total if pd.notna(total) else 220.0,
                     'vegas_implied_home_prob': implied_prob,
-                    'vegas_ml_home': ml_home if pd.notna(ml_home) else -110,
-                    'vegas_ml_away': ml_away if pd.notna(ml_away) else -110,
+                    'vegas_ml_home': ml_home if pd.notna(ml_home) and abs(ml_home) <= 5000 else -110,
+                    'vegas_ml_away': ml_away if pd.notna(ml_away) and abs(ml_away) <= 5000 else -110,
                     'vegas_has_odds': 1
                 })
         

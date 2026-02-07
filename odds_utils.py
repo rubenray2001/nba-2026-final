@@ -91,6 +91,10 @@ def moneyline_to_probability(moneyline: float) -> float:
     if pd.isna(moneyline) or moneyline == 0:
         return 0.5
     
+    # Filter out garbage values from API (e.g., -199900)
+    if abs(moneyline) > 5000:
+        return 0.5
+    
     if moneyline < 0:
         # Favorite
         prob = abs(moneyline) / (abs(moneyline) + 100)
@@ -98,7 +102,8 @@ def moneyline_to_probability(moneyline: float) -> float:
         # Underdog
         prob = 100 / (moneyline + 100)
     
-    return prob
+    # Clamp to realistic range
+    return max(0.05, min(0.95, prob))
 
 
 def probability_to_moneyline(probability: float) -> int:
