@@ -272,9 +272,13 @@ class EnhancedFeatureEngineer(FeatureEngineer):
                 # Clamp to realistic range (no team is >95% or <5% to win)
                 implied_prob = max(0.05, min(0.95, implied_prob))
                 
+                # Filter garbage spread values (no real NBA spread exceeds ~25)
+                clean_spread = spread_home if pd.notna(spread_home) and abs(spread_home) <= 25 else 0.0
+                clean_total = total if pd.notna(total) and 170 <= total <= 280 else 220.0
+                
                 vegas_features.append({
-                    'vegas_spread_home': spread_home if pd.notna(spread_home) else 0.0,
-                    'vegas_total': total if pd.notna(total) else 220.0,
+                    'vegas_spread_home': clean_spread,
+                    'vegas_total': clean_total,
                     'vegas_implied_home_prob': implied_prob,
                     'vegas_ml_home': ml_home if pd.notna(ml_home) and abs(ml_home) <= 5000 else -110,
                     'vegas_ml_away': ml_away if pd.notna(ml_away) and abs(ml_away) <= 5000 else -110,

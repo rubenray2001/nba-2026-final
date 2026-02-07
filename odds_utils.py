@@ -45,16 +45,29 @@ def get_consensus_odds(odds_df: pd.DataFrame, game_id: int, preferred_vendors: l
                 game_odds[col] = game_odds[col].astype(str).str.replace('"', '').str.replace("'", "")
             game_odds.loc[:, col] = pd.to_numeric(game_odds[col], errors='coerce')
     
-    # Calculate consensus (average across vendors)
+    # Filter out garbage data before computing consensus
+    # BallDontLie API sometimes returns junk values (-10000 ML, +38.5 spread)
+    clean_odds = game_odds.copy()
+    clean_odds.loc[clean_odds['moneyline_home_odds'].abs() > 5000, 'moneyline_home_odds'] = np.nan
+    clean_odds.loc[clean_odds['moneyline_away_odds'].abs() > 5000, 'moneyline_away_odds'] = np.nan
+    clean_odds.loc[clean_odds['spread_home_value'].abs() > 25, 'spread_home_value'] = np.nan
+    clean_odds.loc[clean_odds['spread_away_value'].abs() > 25, 'spread_away_value'] = np.nan
+    clean_odds.loc[(clean_odds['total_value'] < 170) | (clean_odds['total_value'] > 280), 'total_value'] = np.nan
+    
+    # Calculate consensus (median across vendors, ignoring garbage)
     consensus = {
-        'spread_home': game_odds['spread_home_value'].median(),
-        'spread_away': game_odds['spread_away_value'].median(),
-        'total': game_odds['total_value'].median(),
-        'moneyline_home': game_odds['moneyline_home_odds'].median(),
-        'moneyline_away': game_odds['moneyline_away_odds'].median(),
+        'spread_home': clean_odds['spread_home_value'].median(),
+        'spread_away': clean_odds['spread_away_value'].median(),
+        'total': clean_odds['total_value'].median(),
+        'moneyline_home': clean_odds['moneyline_home_odds'].median(),
+        'moneyline_away': clean_odds['moneyline_away_odds'].median(),
         'num_vendors': len(game_odds),
         'has_odds': True
     }
+    
+    # If all values were garbage, mark as no odds
+    if pd.isna(consensus['spread_home']) and pd.isna(consensus['moneyline_home']):
+        return get_default_odds()
     
     # Calculate implied probabilities from moneyline
     consensus['implied_home_prob'] = moneyline_to_probability(consensus['moneyline_home'])
