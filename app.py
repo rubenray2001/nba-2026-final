@@ -1589,6 +1589,7 @@ def main():
                     current_season,
                     injuries=injuries,
                     odds_df=odds_df,
+                    standings=historical_data.get('standings', pd.DataFrame()),
                     player_stats=None  # Future: pass player PPG map when available
                 )
                 

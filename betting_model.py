@@ -145,19 +145,17 @@ class BettingModel:
         results['ml_pick'] = np.where(blended_ml > 0.5, 'HOME', 'AWAY')
         results['ml_confidence'] = np.maximum(blended_ml, 1 - blended_ml)
         
-        # Spread: Use Vegas spread direction as anchor
-        # If vegas_spread < 0, home is favorite → home covers is less likely
-        # Model's spread prob is home-covers probability
+        # Spread: The Vegas spread line is SET so both sides have ~50% cover probability.
+        # Don't convert spread to cover probability (0.5 + spread*0.03 is WRONG for ATS —
+        # that formula estimates WIN probability, not cover probability).
+        # Instead, anchor at 50% and let the model's signal adjust.
         raw_spread_probs = self.spread_model.predict_proba(X_scaled)[:, 1]
         
-        # Convert Vegas spread to an implied "home covers" probability
-        # Rule of thumb: each point of spread ~ 3% probability shift
-        vegas_spread_implied = 0.5 + (vegas_spread * 0.03)
-        vegas_spread_implied = np.clip(vegas_spread_implied, 0.15, 0.85)
-        
+        # Anchor at 50% (the spread IS the 50/50 point), shrink model toward it
+        # This gives: blended = 0.5 + 0.55 * (raw - 0.5) when Vegas odds exist
         blended_spread = np.where(
             vegas_has_odds > 0,
-            0.65 * vegas_spread_implied + 0.35 * raw_spread_probs,
+            0.45 * 0.5 + 0.55 * raw_spread_probs,
             raw_spread_probs
         )
         blended_spread = np.clip(blended_spread, 0.05, 0.95)
