@@ -115,26 +115,64 @@ class BettingModel:
         # Scale
         X_scaled = self.scaler.transform(X)
         
-        # Predictions
+        # Raw model predictions
         results = {}
         
-        # Moneyline
-        ml_probs = self.ml_model.predict_proba(X_scaled)
-        results['ml_home_prob'] = ml_probs[:, 1]
-        results['ml_pick'] = np.where(ml_probs[:, 1] > 0.5, 'HOME', 'AWAY')
-        results['ml_confidence'] = np.maximum(ml_probs[:, 1], 1 - ml_probs[:, 1])
+        # =====================================================================
+        # VEGAS-ANCHORED BLENDING for betting model
+        # Same rationale as model_engine.py: model was trained on zero Vegas,
+        # so we blend raw model output with Vegas implied probabilities.
+        # =====================================================================
+        VEGAS_WEIGHT = 0.55
+        MODEL_WEIGHT = 0.45
         
-        # Spread
-        spread_probs = self.spread_model.predict_proba(X_scaled)
-        results['spread_home_prob'] = spread_probs[:, 1]
-        results['spread_pick'] = np.where(spread_probs[:, 1] > 0.5, 'HOME', 'AWAY')
-        results['spread_confidence'] = np.maximum(spread_probs[:, 1], 1 - spread_probs[:, 1])
+        # Extract Vegas features from input
+        vegas_implied = features_df.get('vegas_implied_home_prob', pd.Series([0.5] * len(features_df), index=features_df.index)).fillna(0.5).values
+        vegas_has_odds = features_df.get('vegas_has_odds', pd.Series([0] * len(features_df), index=features_df.index)).fillna(0).values
+        vegas_spread = features_df.get('vegas_spread_home', pd.Series([0.0] * len(features_df), index=features_df.index)).fillna(0.0).values
+        vegas_total_val = features_df.get('vegas_total', pd.Series([220.0] * len(features_df), index=features_df.index)).fillna(220.0).values
         
-        # Totals
-        total_probs = self.totals_model.predict_proba(X_scaled)
-        results['over_prob'] = total_probs[:, 1]
-        results['total_pick'] = np.where(total_probs[:, 1] > 0.5, 'OVER', 'UNDER')
-        results['total_confidence'] = np.maximum(total_probs[:, 1], 1 - total_probs[:, 1])
+        # Moneyline: blend with Vegas implied prob
+        raw_ml_probs = self.ml_model.predict_proba(X_scaled)[:, 1]
+        blended_ml = np.where(
+            vegas_has_odds > 0,
+            VEGAS_WEIGHT * vegas_implied + MODEL_WEIGHT * raw_ml_probs,
+            raw_ml_probs
+        )
+        blended_ml = np.clip(blended_ml, 0.05, 0.95)
+        
+        results['ml_home_prob'] = blended_ml
+        results['ml_pick'] = np.where(blended_ml > 0.5, 'HOME', 'AWAY')
+        results['ml_confidence'] = np.maximum(blended_ml, 1 - blended_ml)
+        
+        # Spread: Use Vegas spread direction as anchor
+        # If vegas_spread < 0, home is favorite → home covers is less likely
+        # Model's spread prob is home-covers probability
+        raw_spread_probs = self.spread_model.predict_proba(X_scaled)[:, 1]
+        
+        # Convert Vegas spread to an implied "home covers" probability
+        # Rule of thumb: each point of spread ~ 3% probability shift
+        vegas_spread_implied = 0.5 + (vegas_spread * 0.03)
+        vegas_spread_implied = np.clip(vegas_spread_implied, 0.15, 0.85)
+        
+        blended_spread = np.where(
+            vegas_has_odds > 0,
+            VEGAS_WEIGHT * vegas_spread_implied + MODEL_WEIGHT * raw_spread_probs,
+            raw_spread_probs
+        )
+        blended_spread = np.clip(blended_spread, 0.05, 0.95)
+        
+        results['spread_home_prob'] = blended_spread
+        results['spread_pick'] = np.where(blended_spread > 0.5, 'HOME', 'AWAY')
+        results['spread_confidence'] = np.maximum(blended_spread, 1 - blended_spread)
+        
+        # Totals: blend model with naive Vegas total anchor (50/50 baseline)
+        raw_total_probs = self.totals_model.predict_proba(X_scaled)[:, 1]
+        # Model output alone for totals (Vegas total is already in the features,
+        # and there's no clean implied over/under probability from the line)
+        results['over_prob'] = raw_total_probs
+        results['total_pick'] = np.where(raw_total_probs > 0.5, 'OVER', 'UNDER')
+        results['total_confidence'] = np.maximum(raw_total_probs, 1 - raw_total_probs)
         
         return pd.DataFrame(results, index=features_df.index)
     

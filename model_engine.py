@@ -445,29 +445,92 @@ class EliteEnsembleModel:
         else:
             X_final = X_scaled
         
-        # Predict scores
-        home_scores = self.home_score_ensemble.predict(X_final)
-        visitor_scores = self.visitor_score_ensemble.predict(X_final)
+        # Predict scores (raw model output)
+        raw_home_scores = self.home_score_ensemble.predict(X_final)
+        raw_visitor_scores = self.visitor_score_ensemble.predict(X_final)
         
-        # Predict winner and probabilities (Ensemble)
-        winner_probs = self.winner_ensemble.predict_proba(X_final)[:, 1]
+        # Predict winner and probabilities (raw model output)
+        raw_winner_probs = self.winner_ensemble.predict_proba(X_final)[:, 1]
         
         # NOTE: LSTM blending is DISABLED for prediction.
-        # The LSTM expects chronologically ordered sequences of the SAME team's games.
-        # At prediction time, features_df contains independent games (different matchups),
-        # so sliding-window sequences across them are meaningless and add noise.
-        # The LSTM is only useful during training where data IS chronologically ordered.
         if DL_AVAILABLE and self.lstm_model:
             print("INFO: LSTM model loaded but skipped for prediction (sequences not applicable to independent games)")
         
+        # =====================================================================
+        # VEGAS-ANCHORED BLENDING
+        # The model was trained WITHOUT real Vegas data (all defaults/zeros),
+        # so the ML model can't properly weight Vegas signals. Instead, we
+        # blend the model output with Vegas lines directly at prediction time.
+        #
+        # Vegas lines are the market consensus — the best public predictor.
+        # The model adds value via ELO, rest, injuries, H2H, momentum.
+        #
+        # Blending weights:
+        #   - Winner prob: 55% Vegas implied + 45% model (Vegas is more calibrated)
+        #   - Scores: Use Vegas total as anchor, model spread for direction
+        #   - Spread: 60% Vegas + 40% model (Vegas spread is very accurate)
+        # =====================================================================
+        
+        VEGAS_PROB_WEIGHT = 0.55
+        MODEL_PROB_WEIGHT = 0.45
+        VEGAS_SPREAD_WEIGHT = 0.60
+        MODEL_SPREAD_WEIGHT = 0.40
+        
+        # Extract Vegas features from the input (they're in features_df)
+        vegas_implied = features_df.get('vegas_implied_home_prob', pd.Series([0.5] * len(features_df), index=features_df.index))
+        vegas_spread = features_df.get('vegas_spread_home', pd.Series([0.0] * len(features_df), index=features_df.index))
+        vegas_total = features_df.get('vegas_total', pd.Series([220.0] * len(features_df), index=features_df.index))
+        vegas_has_odds = features_df.get('vegas_has_odds', pd.Series([0] * len(features_df), index=features_df.index))
+        
+        # Replace NaN/0 defaults
+        vegas_implied = vegas_implied.fillna(0.5)
+        vegas_spread = vegas_spread.fillna(0.0)
+        vegas_total = vegas_total.fillna(220.0)
+        vegas_has_odds = vegas_has_odds.fillna(0)
+        
+        # Blend probabilities: only blend when real Vegas odds exist
+        blended_probs = np.where(
+            vegas_has_odds.values > 0,
+            VEGAS_PROB_WEIGHT * vegas_implied.values + MODEL_PROB_WEIGHT * raw_winner_probs,
+            raw_winner_probs  # No Vegas data — use model alone
+        )
+        # Clamp to [0.05, 0.95]
+        blended_probs = np.clip(blended_probs, 0.05, 0.95)
+        
+        # Blend spread: Vegas spread as anchor, model adds adjustment
+        raw_model_spread = raw_home_scores - raw_visitor_scores
+        blended_spread = np.where(
+            vegas_has_odds.values > 0,
+            VEGAS_SPREAD_WEIGHT * vegas_spread.values + MODEL_SPREAD_WEIGHT * raw_model_spread,
+            raw_model_spread
+        )
+        
+        # Blend scores: Use Vegas total for magnitude, blended spread for direction
+        blended_total = np.where(
+            vegas_has_odds.values > 0,
+            0.55 * vegas_total.values + 0.45 * (raw_home_scores + raw_visitor_scores),
+            raw_home_scores + raw_visitor_scores
+        )
+        blended_home_scores = (blended_total + blended_spread) / 2
+        blended_visitor_scores = (blended_total - blended_spread) / 2
+        
+        # Log blending for debugging
+        n_blended = int(np.sum(vegas_has_odds.values > 0))
+        if n_blended > 0:
+            print(f"VEGAS BLEND: {n_blended}/{len(features_df)} games blended with Vegas "
+                  f"(weights: {VEGAS_PROB_WEIGHT:.0%} Vegas / {MODEL_PROB_WEIGHT:.0%} Model)")
+        
         # Create predictions dataframe - preserve original index for proper game matching
         predictions = pd.DataFrame({
-            'predicted_home_score': home_scores,
-            'predicted_visitor_score': visitor_scores,
-            'predicted_spread': home_scores - visitor_scores,
-            'predicted_total': home_scores + visitor_scores,
-            'home_win_probability': winner_probs,
-            'visitor_win_probability': 1 - winner_probs
+            'predicted_home_score': blended_home_scores,
+            'predicted_visitor_score': blended_visitor_scores,
+            'predicted_spread': blended_spread,
+            'predicted_total': blended_total,
+            'home_win_probability': blended_probs,
+            'visitor_win_probability': 1 - blended_probs,
+            # Also store raw model values for analysis
+            'raw_model_home_prob': raw_winner_probs,
+            'raw_model_spread': raw_model_spread,
         }, index=features_df.index)
         
         return predictions
