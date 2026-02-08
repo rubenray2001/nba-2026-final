@@ -1526,163 +1526,170 @@ def main():
             </div>
             """, unsafe_allow_html=True)
         
-        # Generate predictions
-        data_mgr = DataManager()
-        feature_eng = FeatureEngineer()
+        # =====================================================================
+        # CACHED PREDICTION PIPELINE
+        # All heavy computation (ELO, features, predictions) is cached in
+        # session_state so Streamlit reruns don't repeat the entire pipeline.
+        # =====================================================================
+        prediction_cache_key = f"predictions_{target_date_str}"
         
-        # Get historical data for context
-        current_season = target_date.year if target_date.month >= 10 else target_date.year - 1
-        
-        historical_data = data_mgr.get_complete_training_data([current_season - 1, current_season])
-        
-        # Fetch RECENT games (last 14 days) fresh from API for accurate rest day calculations
-        recent_dates = [(target_date - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1, 15)]
-        try:
-            recent_games = data_mgr.client.get_games(dates=recent_dates, per_page=100)
-            if recent_games:
-                recent_df = pd.DataFrame(recent_games)
-                if not recent_df.empty:
-                    # Flatten team data
-                    recent_df['home_team_id'] = recent_df['home_team'].apply(lambda x: x['id'] if isinstance(x, dict) else None)
-                    recent_df['visitor_team_id'] = recent_df['visitor_team'].apply(lambda x: x['id'] if isinstance(x, dict) else None)
-                    recent_df['home_team_score'] = recent_df.get('home_team_score', 0)
-                    recent_df['visitor_team_score'] = recent_df.get('visitor_team_score', 0)
-                    recent_df['season'] = current_season
-                    
-                    # Filter to completed games only
-                    recent_df = recent_df[recent_df['status'] == 'Final'].copy()
-                    
-                    # Merge with historical data (remove duplicates by game id)
-                    if 'games' in historical_data and not historical_data['games'].empty:
-                        existing_ids = set(historical_data['games']['id'].tolist()) if 'id' in historical_data['games'].columns else set()
-                        new_games = recent_df[~recent_df['id'].isin(existing_ids)]
-                        if not new_games.empty:
-                            historical_data['games'] = pd.concat([historical_data['games'], new_games], ignore_index=True)
-                            print(f"Added {len(new_games)} recent games for accurate rest days")
-        except Exception as e:
-            print(f"Could not fetch recent games: {e}")
-        
-        # Pre-calculate ELO ratings on historical data so build_features_for_game
-        # can look up real ELO values instead of defaulting to 1500 for everyone.
-        # _calculate_elo requires 'game_id' column — add it if missing.
-        if 'games' in historical_data and not historical_data['games'].empty:
-            hist_games = historical_data['games']
-            if 'home_elo' not in hist_games.columns:
-                if 'game_id' not in hist_games.columns and 'id' in hist_games.columns:
-                    hist_games = hist_games.rename(columns={'id': 'game_id'})
-                    historical_data['games'] = hist_games
+        if prediction_cache_key not in st.session_state:
+            with st.spinner("Building predictions (ELO, features, model)... This runs once."):
+                data_mgr = DataManager()
+                feature_eng = FeatureEngineer()
+                
+                # Get historical data for context
+                current_season = target_date.year if target_date.month >= 10 else target_date.year - 1
+                
+                historical_data = data_mgr.get_complete_training_data([current_season - 1, current_season])
+                
+                # Fetch RECENT games (last 14 days) fresh from API for accurate rest day calculations
+                recent_dates = [(target_date - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1, 15)]
                 try:
-                    elo_df = feature_eng._calculate_elo(hist_games)
-                    historical_data['games'] = pd.merge(hist_games, elo_df, on='game_id', how='left')
-                    print(f"Pre-calculated ELO ratings for {len(elo_df)} historical games")
+                    recent_games = data_mgr.client.get_games(dates=recent_dates, per_page=100)
+                    if recent_games:
+                        recent_df = pd.DataFrame(recent_games)
+                        if not recent_df.empty:
+                            # Flatten team data
+                            recent_df['home_team_id'] = recent_df['home_team'].apply(lambda x: x['id'] if isinstance(x, dict) else None)
+                            recent_df['visitor_team_id'] = recent_df['visitor_team'].apply(lambda x: x['id'] if isinstance(x, dict) else None)
+                            recent_df['home_team_score'] = recent_df.get('home_team_score', 0)
+                            recent_df['visitor_team_score'] = recent_df.get('visitor_team_score', 0)
+                            recent_df['season'] = current_season
+                            
+                            # Filter to completed games only
+                            recent_df = recent_df[recent_df['status'] == 'Final'].copy()
+                            
+                            # Merge with historical data (remove duplicates by game id)
+                            if 'games' in historical_data and not historical_data['games'].empty:
+                                existing_ids = set(historical_data['games']['id'].tolist()) if 'id' in historical_data['games'].columns else set()
+                                new_games = recent_df[~recent_df['id'].isin(existing_ids)]
+                                if not new_games.empty:
+                                    historical_data['games'] = pd.concat([historical_data['games'], new_games], ignore_index=True)
+                                    print(f"Added {len(new_games)} recent games for accurate rest days")
                 except Exception as e:
-                    print(f"Warning: Could not pre-calculate ELO: {e}")
-        
-        # Fetch injuries for enhanced features
-        injuries = get_injuries()
-        
-        # Build features for each game with enhanced features (Vegas, injuries, H2H)
-        all_features = {}  # Use dict to track game index -> features
-        for idx, game in games_df.iterrows():
-            try:
-                features = feature_eng.build_features_for_game(
-                    game.to_dict(),
-                    historical_data,
-                    current_season,
-                    injuries=injuries,
-                    odds_df=odds_df,
-                    standings=historical_data.get('standings', pd.DataFrame()),
-                    player_stats=None  # Future: pass player PPG map when available
-                )
+                    print(f"Could not fetch recent games: {e}")
                 
-                # If features failed to build, use neutral defaults and flag it
-                if features is None:
-                    print(f"WARNING: Feature building returned None for game {game.get('id')} - using neutral defaults")
-                    features = {
-                        'home_elo': 1500, 'visitor_elo': 1500, 'elo_diff': 0,
-                        'home_win_pct_last10': 0.5, 'visitor_win_pct_last10': 0.5,
-                        'home_points_scored_last10': 110, 'visitor_points_scored_last10': 110,
-                        'home_rest_days': 2, 'visitor_rest_days': 2,
-                        'rest_advantage': 0, 'momentum_diff_5': 0, 'momentum_diff_10': 0,
-                        'net_rating_diff': 0,
-                        'vegas_spread_home': 0.0, 'vegas_total': 220.0,
-                        'vegas_implied_home_prob': 0.5, 'vegas_has_odds': 0,
-                        'h2h_home_win_pct': 0.5, 'h2h_avg_margin': 0, 'h2h_last3_home_wins': 0.5,
-                        'injury_impact_diff': 0.0, 'home_injury_impact': 0.0, 'visitor_injury_impact': 0.0,
-                    }
-                    features['_using_defaults'] = True
+                # Pre-calculate ELO ratings on historical data so build_features_for_game
+                # can look up real ELO values instead of defaulting to 1500 for everyone.
+                if 'games' in historical_data and not historical_data['games'].empty:
+                    hist_games = historical_data['games']
+                    if 'home_elo' not in hist_games.columns:
+                        if 'game_id' not in hist_games.columns and 'id' in hist_games.columns:
+                            hist_games = hist_games.rename(columns={'id': 'game_id'})
+                            historical_data['games'] = hist_games
+                        try:
+                            elo_df = feature_eng._calculate_elo(hist_games)
+                            historical_data['games'] = pd.merge(hist_games, elo_df, on='game_id', how='left')
+                            print(f"Pre-calculated ELO ratings for {len(elo_df)} historical games")
+                        except Exception as e:
+                            print(f"Warning: Could not pre-calculate ELO: {e}")
                 
-                # NOTE: Vegas odds and injury features are now handled by
-                # EnhancedFeatureEngineer.build_features_for_game() which adds
-                # them during feature building. No manual addition needed here.
+                # Fetch injuries for enhanced features
+                injuries = get_injuries()
                 
-                all_features[idx] = features  # Store with game's original index
+                # Build features for each game with enhanced features (Vegas, injuries, H2H)
+                all_features = {}
+                for idx, game in games_df.iterrows():
+                    try:
+                        features = feature_eng.build_features_for_game(
+                            game.to_dict(),
+                            historical_data,
+                            current_season,
+                            injuries=injuries,
+                            odds_df=odds_df,
+                            standings=historical_data.get('standings', pd.DataFrame()),
+                            player_stats=None
+                        )
+                        
+                        if features is None:
+                            print(f"WARNING: Feature building returned None for game {game.get('id')} - using neutral defaults")
+                            features = {
+                                'home_elo': 1500, 'visitor_elo': 1500, 'elo_diff': 0,
+                                'home_win_pct_last10': 0.5, 'visitor_win_pct_last10': 0.5,
+                                'home_points_scored_last10': 110, 'visitor_points_scored_last10': 110,
+                                'home_rest_days': 2, 'visitor_rest_days': 2,
+                                'rest_advantage': 0, 'momentum_diff_5': 0, 'momentum_diff_10': 0,
+                                'net_rating_diff': 0,
+                                'vegas_spread_home': 0.0, 'vegas_total': 220.0,
+                                'vegas_implied_home_prob': 0.5, 'vegas_has_odds': 0,
+                                'h2h_home_win_pct': 0.5, 'h2h_avg_margin': 0, 'h2h_last3_home_wins': 0.5,
+                                'injury_impact_diff': 0.0, 'home_injury_impact': 0.0, 'visitor_injury_impact': 0.0,
+                            }
+                            features['_using_defaults'] = True
+                        
+                        all_features[idx] = features
+                        
+                    except Exception as e:
+                        import traceback
+                        print(f"ERROR: Feature building failed for game {game.get('id')}: {str(e)}")
+                        print(traceback.format_exc())
+                        
+                        defaults = {
+                            'home_elo': 1500, 'visitor_elo': 1500, 'elo_diff': 0,
+                            'home_rest_days': 2, 'visitor_rest_days': 2,
+                            'rest_advantage': 0, 'momentum_diff_5': 0, 'momentum_diff_10': 0,
+                            'net_rating_diff': 0,
+                            'home_is_b2b': 0, 'visitor_is_b2b': 0,
+                            'home_is_3in4': 0, 'visitor_is_3in4': 0,
+                            'home_is_4in5': 0, 'visitor_is_4in5': 0,
+                            'vegas_spread_home': 0.0, 'vegas_total': 220.0,
+                            'vegas_implied_home_prob': 0.5, 'vegas_has_odds': 0,
+                            'home_injuries_out': 0, 'visitor_injuries_out': 0,
+                            'home_questionable': 0, 'visitor_questionable': 0,
+                            'injury_diff': 0, 'home_stars_out': 0, 'visitor_stars_out': 0,
+                            'star_injury_diff': 0, 'home_injury_impact': 0.0,
+                            'visitor_injury_impact': 0.0, 'injury_impact_diff': 0.0,
+                            'h2h_games': 0, 'h2h_home_wins': 0, 'h2h_home_win_pct': 0.5,
+                            'h2h_avg_margin': 0, 'h2h_last3_home_wins': 0.5,
+                            'visitor_travel_miles': 0, 'visitor_tz_change': 0, 'is_long_travel': 0,
+                            'season_phase': 2, 'is_late_season': 0,
+                            'home_motivation': 2, 'visitor_motivation': 2, 'motivation_diff': 0,
+                            '_using_defaults': True,
+                        }
+                        for w in [5, 10, 20]:
+                            for prefix in ['home', 'visitor']:
+                                defaults[f'{prefix}_win_pct_last{w}'] = 0.5
+                                defaults[f'{prefix}_points_scored_last{w}'] = 110
+                                defaults[f'{prefix}_points_allowed_last{w}'] = 110
+                                defaults[f'{prefix}_point_diff_last{w}'] = 0
+                                defaults[f'{prefix}_pace_last{w}'] = 98
+                                defaults[f'{prefix}_efg_pct_last{w}'] = 0.54
+                                defaults[f'{prefix}_tov_pct_last{w}'] = 0.13
+                                defaults[f'{prefix}_oreb_pct_last{w}'] = 0.25
+                                defaults[f'{prefix}_ftr_last{w}'] = 0.20
+                                defaults[f'{prefix}_opp_efg_pct_last{w}'] = 0.54
+                                defaults[f'{prefix}_opp_tov_pct_last{w}'] = 0.13
+                                defaults[f'{prefix}_opp_oreb_pct_last{w}'] = 0.25
+                                defaults[f'{prefix}_opp_ftr_last{w}'] = 0.20
+                        all_features[idx] = defaults
                 
-            except Exception as e:
-                # Create neutral default features so the game still displays
-                # Log the error prominently so we can debug data issues
-                import traceback
-                print(f"ERROR: Feature building failed for game {game.get('id')}: {str(e)}")
-                print(traceback.format_exc())
+                if not all_features:
+                    st.error("Could not generate features for any games. Please check data availability.")
+                    return
                 
-                # Build neutral defaults that match league averages
-                defaults = {
-                    'home_elo': 1500, 'visitor_elo': 1500, 'elo_diff': 0,
-                    'home_rest_days': 2, 'visitor_rest_days': 2,
-                    'rest_advantage': 0, 'momentum_diff_5': 0, 'momentum_diff_10': 0,
-                    'net_rating_diff': 0,
-                    # Schedule flags
-                    'home_is_b2b': 0, 'visitor_is_b2b': 0,
-                    'home_is_3in4': 0, 'visitor_is_3in4': 0,
-                    'home_is_4in5': 0, 'visitor_is_4in5': 0,
-                    # Vegas defaults (neutral)
-                    'vegas_spread_home': 0.0, 'vegas_total': 220.0,
-                    'vegas_implied_home_prob': 0.5, 'vegas_has_odds': 0,
-                    # Injury defaults (none)
-                    'home_injuries_out': 0, 'visitor_injuries_out': 0,
-                    'home_questionable': 0, 'visitor_questionable': 0,
-                    'injury_diff': 0, 'home_stars_out': 0, 'visitor_stars_out': 0,
-                    'star_injury_diff': 0, 'home_injury_impact': 0.0,
-                    'visitor_injury_impact': 0.0, 'injury_impact_diff': 0.0,
-                    # H2H defaults (neutral)
-                    'h2h_games': 0, 'h2h_home_wins': 0, 'h2h_home_win_pct': 0.5,
-                    'h2h_avg_margin': 0, 'h2h_last3_home_wins': 0.5,
-                    # Situational defaults
-                    'visitor_travel_miles': 0, 'visitor_tz_change': 0, 'is_long_travel': 0,
-                    'season_phase': 2, 'is_late_season': 0,
-                    'home_motivation': 2, 'visitor_motivation': 2, 'motivation_diff': 0,
-                    '_using_defaults': True,
+                features_df = pd.DataFrame.from_dict(all_features, orient='index')
+                predictions_df = model.predict(features_df)
+                
+                # Cache everything in session_state
+                st.session_state[prediction_cache_key] = {
+                    'all_features': all_features,
+                    'features_df': features_df,
+                    'predictions_df': predictions_df,
                 }
-                # Rolling stats for all windows with league-average values
-                for w in [5, 10, 20]:
-                    for prefix in ['home', 'visitor']:
-                        defaults[f'{prefix}_win_pct_last{w}'] = 0.5
-                        defaults[f'{prefix}_points_scored_last{w}'] = 110
-                        defaults[f'{prefix}_points_allowed_last{w}'] = 110
-                        defaults[f'{prefix}_point_diff_last{w}'] = 0
-                        defaults[f'{prefix}_pace_last{w}'] = 98
-                        defaults[f'{prefix}_efg_pct_last{w}'] = 0.54
-                        defaults[f'{prefix}_tov_pct_last{w}'] = 0.13
-                        defaults[f'{prefix}_oreb_pct_last{w}'] = 0.25
-                        defaults[f'{prefix}_ftr_last{w}'] = 0.20
-                        defaults[f'{prefix}_opp_efg_pct_last{w}'] = 0.54
-                        defaults[f'{prefix}_opp_tov_pct_last{w}'] = 0.13
-                        defaults[f'{prefix}_opp_oreb_pct_last{w}'] = 0.25
-                        defaults[f'{prefix}_opp_ftr_last{w}'] = 0.20
-                all_features[idx] = defaults
+                print(f"Predictions cached for {target_date_str}")
+        else:
+            print(f"Using cached predictions for {target_date_str}")
         
-        if not all_features:
-            st.error("Could not generate features for any games. Please check data availability.")
-            return
-        
-        # Create DataFrame with indices matching games_df for proper lookup after sorting
-        features_df = pd.DataFrame.from_dict(all_features, orient='index')
-        
-        # Make predictions
-        predictions_df = model.predict(features_df)
+        # Retrieve from cache
+        cached = st.session_state[prediction_cache_key]
+        all_features = cached['all_features']
+        features_df = cached['features_df']
+        predictions_df = cached['predictions_df']
         
         # Initialize tracker and save predictions
         tracker = PredictionTracker()
+        data_mgr = DataManager()
         
         # Check past games for results (updates accuracy tracking)
         past_games = data_mgr.client.get_games(

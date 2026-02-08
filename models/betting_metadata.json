@@ -145,15 +145,15 @@
     "pace_indicator",
     "defense_indicator"
   ],
-  "trained_at": "2026-02-05T23:34:42.473615",
+  "trained_at": "2026-02-07T23:46:58.238907",
   "results": {
     "moneyline": {
       "accuracy": 0.667173483351072,
       "high_conf_accuracy": 0.7554086538461539
     },
     "spread": {
-      "accuracy": 0.7162840200699407,
-      "confident_accuracy": 0.7614115841963943
+      "accuracy": 0.6689980234149309,
+      "confident_accuracy": 0.7106944158252627
     },
     "totals": {
       "accuracy": 0.5155846130454614,

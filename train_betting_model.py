@@ -20,84 +20,36 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.calibration import CalibratedClassifierCV
 
-from data_manager import DataManager
-from features_enhanced import EnhancedFeatureEngineer as FeatureEngineer
-from odds_api_client import TheOddsAPIClient
+# Note: DataManager/FeatureEngineer no longer needed - we load pre-built training data
 
 
-def fetch_historical_odds(seasons=[2024, 2025]):
-    """Fetch historical Vegas odds for training"""
-    print("Fetching historical odds data...")
-    odds_client = TheOddsAPIClient()
+def load_prebuilt_training_data():
+    """Load pre-built training data from train_model.py output (fast path)"""
+    path = "data/training_data.csv"
+    if not os.path.exists(path):
+        return None
     
-    # We'll use recent games where we have odds
-    all_odds = []
+    print(f"Loading pre-built training data from {path}...")
+    df = pd.read_csv(path, low_memory=False)
     
-    # Get odds for recent dates
-    for days_ago in range(1, 60):  # Last 60 days
-        date = (datetime.now() - timedelta(days=days_ago)).strftime('%Y-%m-%d')
-        try:
-            odds = odds_client.get_odds()
-            if odds:
-                for game in odds:
-                    game['fetch_date'] = date
-                    all_odds.append(game)
-        except Exception:
-            pass
+    # Check required columns exist
+    required = ['home_score', 'visitor_score', 'home_won', 'date']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        print(f"Pre-built data missing columns: {missing}")
+        return None
     
-    return all_odds
-
-
-def prepare_betting_data(games_df, historical_data, feature_eng):
-    """Prepare training data with betting outcomes"""
+    # Calculate actual outcomes
+    df['actual_spread'] = df['home_score'] - df['visitor_score']
+    df['actual_total'] = df['home_score'] + df['visitor_score']
+    df['actual_home_score'] = df['home_score']
+    df['actual_visitor_score'] = df['visitor_score']
     
-    print(f"Processing {len(games_df)} games for betting outcomes...")
+    # Filter out games with zero scores
+    df = df[(df['home_score'] > 0) & (df['visitor_score'] > 0)].copy()
     
-    records = []
-    
-    for idx, game in games_df.iterrows():
-        try:
-            # Only use completed games
-            if game.get('status') != 'Final':
-                continue
-            
-            home_score = game.get('home_team_score', 0)
-            visitor_score = game.get('visitor_team_score', 0)
-            
-            if not home_score or not visitor_score:
-                continue
-            
-            # Build features
-            features = feature_eng.build_features_for_game(
-                game.to_dict() if hasattr(game, 'to_dict') else game,
-                historical_data,
-                game.get('season', 2024)
-            )
-            
-            if features is None:
-                continue
-            
-            # Calculate actual outcomes
-            actual_spread = home_score - visitor_score  # Positive = home won by X
-            actual_total = home_score + visitor_score
-            home_won = 1 if home_score > visitor_score else 0
-            
-            # Add outcomes to features
-            features['actual_home_score'] = home_score
-            features['actual_visitor_score'] = visitor_score
-            features['actual_spread'] = actual_spread
-            features['actual_total'] = actual_total
-            features['home_won'] = home_won
-            features['game_id'] = game.get('id')
-            features['date'] = game.get('date')
-            
-            records.append(features)
-            
-        except Exception as e:
-            continue
-    
-    print(f"Prepared {len(records)} games with complete data")
-    return pd.DataFrame(records)
+    print(f"Loaded {len(df)} games with complete features (instant!)")
+    return df
 
 
 def add_vegas_proxy_features(df):
@@ -189,12 +141,18 @@ def train_betting_models(df):
     print("TRAINING BETTING-FOCUSED MODELS")
     print("="*60)
     
-    # Feature columns (exclude targets and identifiers)
+    # Feature columns (exclude targets, identifiers, and any leaky score columns)
     exclude_cols = [
         'actual_home_score', 'actual_visitor_score', 'actual_spread', 
         'actual_total', 'home_won', 'game_id', 'date',
         'home_covered', 'went_over', 'favorite_won', 'upset',
-        'est_vegas_spread', 'est_vegas_total', 'est_home_win_prob'
+        'est_vegas_spread', 'est_vegas_total', 'est_home_win_prob',
+        # CRITICAL: Exclude raw scores to prevent data leakage
+        'home_score', 'visitor_score', 'season',
+        'home_team_id', 'visitor_team_id',
+        # Also exclude Vegas proxy helper columns
+        'combined_offense', 'combined_defense', 'pace_indicator', 
+        'defense_indicator', 'scoring_volatility'
     ]
     
     feature_cols = [c for c in df.columns if c not in exclude_cols and df[c].dtype in ['int64', 'float64']]
@@ -393,31 +351,12 @@ def main():
     print("Focus: Moneyline, Spread, Over/Under")
     print("="*60)
     
-    # Initialize
-    data_mgr = DataManager()
-    feature_eng = FeatureEngineer()
+    # FAST PATH: Use pre-built training data from train_model.py
+    betting_df = load_prebuilt_training_data()
     
-    # Get historical games
-    print("\nFetching historical game data...")
-    seasons = [2023, 2024, 2025]
-    historical_data = data_mgr.get_complete_training_data(seasons)
-    
-    if historical_data['games'].empty:
-        print("ERROR: No historical data available")
-        return
-    
-    games_df = historical_data['games']
-    print(f"Loaded {len(games_df)} total games")
-    
-    # Filter to completed games
-    games_df = games_df[games_df['status'] == 'Final'].copy()
-    print(f"Filtered to {len(games_df)} completed games")
-    
-    # Prepare betting data
-    betting_df = prepare_betting_data(games_df, historical_data, feature_eng)
-    
-    if len(betting_df) < 100:
-        print("ERROR: Not enough games for training")
+    if betting_df is None or len(betting_df) < 100:
+        print("ERROR: No pre-built training data found.")
+        print("Run 'python train_model.py' first to generate training data.")
         return
     
     # Add Vegas proxy features

@@ -572,5 +572,41 @@
     "visitor_score_mae": 9.64772320328139,
     "overfit_gap": 0,
     "model_type": "unknown"
+  },
+  {
+    "timestamp": "2026-02-07T18:13:57.056045",
+    "training_samples": 25817,
+    "test_samples": 6455,
+    "total_samples": 32272,
+    "features": 130,
+    "test_accuracy": 0.6395042602633617,
+    "home_score_mae": 9.555084400119297,
+    "visitor_score_mae": 9.647723203281393,
+    "overfit_gap": 0,
+    "model_type": "unknown"
+  },
+  {
+    "timestamp": "2026-02-07T22:59:55.080954",
+    "training_samples": 25817,
+    "test_samples": 6455,
+    "total_samples": 32272,
+    "features": 130,
+    "test_accuracy": 0.6395042602633617,
+    "home_score_mae": 9.555084400119297,
+    "visitor_score_mae": 9.647723203281393,
+    "overfit_gap": 0,
+    "model_type": "unknown"
+  },
+  {
+    "timestamp": "2026-02-07T23:18:16.552553",
+    "training_samples": 25817,
+    "test_samples": 6455,
+    "total_samples": 32272,
+    "features": 130,
+    "test_accuracy": 0.6395042602633617,
+    "home_score_mae": 9.555084400119297,
+    "visitor_score_mae": 9.647723203281393,
+    "overfit_gap": 0,
+    "model_type": "unknown"
   }
 ]

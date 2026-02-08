@@ -132,14 +132,14 @@
     "injury_impact_diff"
   ],
   "training_info": {
-    "trained_at": "2026-02-05T23:01:08.044490",
+    "trained_at": "2026-02-07T23:17:47.496107",
     "training_samples": 25817,
     "test_samples": 6455,
     "features": 130,
     "metrics": {
-      "home_score_test_mae": 9.555084400119298,
-      "visitor_score_test_mae": 9.64772320328139,
-      "home_score_test_r2": 0.09496366783265553,
+      "home_score_test_mae": 9.555084400119297,
+      "visitor_score_test_mae": 9.647723203281393,
+      "home_score_test_r2": 0.09496366783265542,
       "visitor_score_test_r2": 0.08443142543130955,
       "winner_test_accuracy": 0.6395042602633617,
       "winner_cv_mean_accuracy": 0.6575081357508136,

@@ -2,6 +2,7 @@
 Vegas Odds Utilities
 Parse and aggregate betting odds from multiple vendors
 """
+import warnings
 import pandas as pd
 import numpy as np
 from typing import Dict, Optional
@@ -55,15 +56,18 @@ def get_consensus_odds(odds_df: pd.DataFrame, game_id: int, preferred_vendors: l
     clean_odds.loc[(clean_odds['total_value'] < 170) | (clean_odds['total_value'] > 280), 'total_value'] = np.nan
     
     # Calculate consensus (median across vendors, ignoring garbage)
-    consensus = {
-        'spread_home': clean_odds['spread_home_value'].median(),
-        'spread_away': clean_odds['spread_away_value'].median(),
-        'total': clean_odds['total_value'].median(),
-        'moneyline_home': clean_odds['moneyline_home_odds'].median(),
-        'moneyline_away': clean_odds['moneyline_away_odds'].median(),
-        'num_vendors': len(game_odds),
-        'has_odds': True
-    }
+    # Suppress "Mean of empty slice" warning when all values are NaN
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        consensus = {
+            'spread_home': clean_odds['spread_home_value'].median(),
+            'spread_away': clean_odds['spread_away_value'].median(),
+            'total': clean_odds['total_value'].median(),
+            'moneyline_home': clean_odds['moneyline_home_odds'].median(),
+            'moneyline_away': clean_odds['moneyline_away_odds'].median(),
+            'num_vendors': len(game_odds),
+            'has_odds': True
+        }
     
     # If all values were garbage, mark as no odds
     if pd.isna(consensus['spread_home']) and pd.isna(consensus['moneyline_home']):
