@@ -1097,7 +1097,9 @@ def display_game_card(game, odds_df, features, injuries=None, box_scores=None, b
             if betting_rec.get('spread_pick') == 'HOME':
                 spread_line = f"{vegas_spread:+.1f}" if vegas_spread else ""
             else:
-                spread_line = f"+{abs(vegas_spread):.1f}" if vegas_spread else ""
+                # Away team's spread is the negative of home's spread
+                away_spread = -vegas_spread if vegas_spread else 0
+                spread_line = f"{away_spread:+.1f}" if vegas_spread else ""
             badge_class = "badge-pro" if spread_conf >= 0.58 else "badge-outline"
             badges_html += f'<div class="{badge_class}">SPREAD: {spread_pick} {spread_line} ({spread_conf:.0%})</div>'
         

@@ -13,6 +13,8 @@ class PredictionTracker:
         self.data_dir.mkdir(exist_ok=True)
         self.predictions_file = self.data_dir / "predictions.json"
         self.predictions = self._load_predictions()
+        # One-time fix: recalculate spread results with corrected ATS formula
+        self.recalculate_spread_results()
     
     def _load_predictions(self):
         """Load existing predictions from file"""
@@ -98,11 +100,14 @@ class PredictionTracker:
         if betting_spread_pick and vegas_spread is not None:
             # Proper ATS: Did our pick cover?
             # Vegas spread is from home perspective (negative = home favored)
-            # Push (actual == spread) counts as no-bet, not a win or loss
-            if actual_spread == vegas_spread:
+            # e.g., spread = -5.5 means home must win by 6+ to cover
+            # Formula: home covers when actual_margin > -spread (i.e., margin exceeds the line)
+            # Push: actual_margin == -spread (impossible with .5 lines, but handle it)
+            adjusted = actual_spread + vegas_spread  # positive = home covered
+            if adjusted == 0:
                 pred["result"]["betting_spread_correct"] = None  # Push
             else:
-                home_covered = actual_spread > vegas_spread
+                home_covered = adjusted > 0
                 if betting_spread_pick == "HOME":
                     pred["result"]["betting_spread_correct"] = home_covered
                 else:  # AWAY
@@ -131,10 +136,11 @@ class PredictionTracker:
         
         # Legacy ATS check (using predicted winner, not betting model)
         if vegas_spread is not None:
-            if actual_spread == vegas_spread:
+            adjusted = actual_spread + vegas_spread  # positive = home covered
+            if adjusted == 0:
                 pred["result"]["ats_correct"] = None  # Push
             else:
-                home_covered = actual_spread > vegas_spread
+                home_covered = adjusted > 0
                 if pred["predicted_winner"] == pred["home_team"]:
                     pred["result"]["ats_correct"] = home_covered
                 else:
@@ -269,6 +275,66 @@ class PredictionTracker:
         stats["recent_picks"] = recent[:10]
         
         return stats
+    
+    def recalculate_spread_results(self):
+        """
+        Recalculate all spread ATS results using the correct formula.
+        
+        The old formula used `actual_spread > vegas_spread` which is wrong.
+        Correct formula: `(actual_spread + vegas_spread) > 0`
+        
+        This fixes all historical spread accuracy stats.
+        """
+        fixed_count = 0
+        
+        for game_key, pred in self.predictions["games"].items():
+            result = pred.get("result")
+            if result is None:
+                continue
+            
+            actual_spread = result.get("actual_spread")
+            vegas_spread = pred.get("vegas_spread")
+            
+            if actual_spread is None or vegas_spread is None:
+                continue
+            
+            # Recalculate using correct formula
+            adjusted = actual_spread + vegas_spread
+            
+            # Fix betting model spread
+            betting_spread_pick = pred.get("betting_spread_pick")
+            if betting_spread_pick:
+                if adjusted == 0:
+                    new_val = None  # Push
+                else:
+                    home_covered = adjusted > 0
+                    new_val = home_covered if betting_spread_pick == "HOME" else not home_covered
+                
+                old_val = result.get("betting_spread_correct")
+                if old_val != new_val:
+                    result["betting_spread_correct"] = new_val
+                    fixed_count += 1
+            
+            # Fix legacy ATS
+            if adjusted == 0:
+                new_ats = None
+            else:
+                home_covered = adjusted > 0
+                if pred.get("predicted_winner") == pred.get("home_team"):
+                    new_ats = home_covered
+                else:
+                    new_ats = not home_covered
+            
+            old_ats = result.get("ats_correct")
+            if old_ats != new_ats:
+                result["ats_correct"] = new_ats
+                fixed_count += 1
+        
+        if fixed_count > 0:
+            self._save_predictions()
+            print(f"Recalculated {fixed_count} spread results with corrected ATS formula")
+        
+        return fixed_count
     
     def check_and_update_results(self, games_df):
         """Check completed games and update results"""

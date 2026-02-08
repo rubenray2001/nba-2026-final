@@ -156,8 +156,11 @@ def create_betting_targets(df):
     """Create targets for betting models"""
     
     # Target 1: Did home team cover the spread?
-    # If actual spread > estimated vegas spread, home covered
-    df['home_covered'] = (df['actual_spread'] > df['est_vegas_spread']).astype(int)
+    # Spread convention: negative = home favored (e.g., -5.5 means home gives 5.5)
+    # Home covers when: actual_margin + spread > 0
+    # e.g., home -5.5, wins by 8: 8 + (-5.5) = 2.5 > 0 → covered ✓
+    # e.g., home -5.5, wins by 3: 3 + (-5.5) = -2.5 < 0 → didn't cover ✓
+    df['home_covered'] = ((df['actual_spread'] + df['est_vegas_spread']) > 0).astype(int)
     
     # Target 2: Did game go over estimated total?
     df['went_over'] = (df['actual_total'] > df['est_vegas_total']).astype(int)
