@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+library.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Streamlit
+.streamlit/
+# But keep config.toml
+!.streamlit/config.toml
+
+# Project Specific
+data/
+models/**/training_history.json
+*.pkl
+*.json
+!models/**/model_metadata.json
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent/Brain Files
+.gemini/
+brain/
+implementation_plan.md
+task.md
+walkthrough.md
+Dockerfile
+.gcloudignore
