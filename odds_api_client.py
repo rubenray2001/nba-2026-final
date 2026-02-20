@@ -117,7 +117,7 @@ class TheOddsAPIClient:
             event_odds_url = f"{self.base_url}/sports/{self.sport}/events/{event_id}/odds"
             params = {
                 "apiKey": self.api_key,
-                "regions": "us",
+                "regions": "us,eu,uk,au",  # expanded regions for more props
                 "markets": markets,
                 "oddsFormat": "american"
             }
@@ -153,11 +153,32 @@ class TheOddsAPIClient:
         
         # Friendly bookmaker names
         book_display_names = {
-            'bovada': 'Bovada', 'draftkings': 'DraftKings', 'fanduel': 'FanDuel',
-            'betmgm': 'BetMGM', 'caesars': 'Caesars', 'betrivers': 'BetRivers',
-            'mybookieag': 'MyBookie', 'betonlineag': 'BetOnline', 'lowvig': 'LowVig',
-            'fanatics': 'Fanatics', 'betus': 'BetUS', 'pointsbetus': 'PointsBet',
-            'williamhill_us': 'William Hill', 'wynnbet': 'WynnBet',
+            'bovada': 'Bovada', 
+            'draftkings': 'DraftKings', 
+            'fanduel': 'FanDuel',
+            'betmgm': 'BetMGM', 
+            'caesars': 'Caesars',
+            'williamhill_us': 'Caesars',  # WH US rebranded to Caesars
+            'betrivers': 'BetRivers',
+            'fanatics': 'Fanatics',
+            'superbook': 'SuperBook',
+            'barstool': 'ESPN BET', # Rebranded
+            'espnbet': 'ESPN BET',
+            'betus': 'BetUS',
+            'mybookieag': 'MyBookie', 
+            'betonlineag': 'BetOnline', 
+            'lowvig': 'LowVig',
+            'pointsbetus': 'PointsBet', # Bought by Fanatics, but key might persist
+            'wynnbet': 'WynnBet',
+            # International
+            'bet365': 'Bet365', 'unibet': 'Unibet', 'unibet_eu': 'Unibet', 
+            'unibet_uk': 'Unibet', 'pinnacle': 'Pinnacle', 'ladbrokes': 'Ladbrokes',
+            'williamhill': 'William Hill', 'betfair': 'Betfair', 'matchbook': 'Matchbook',
+            'nordicbet': 'NordicBet', 'betsson': 'Betsson', 'coolbet': 'Coolbet',
+            'marathonbet': 'MarathonBet', 'onexbet': '1xBet', 'livescorebet': 'LiveScore Bet',
+            'tipico_us': 'Tipico', 'windcreek': 'Wind Creek',
+            'ballybet': 'Bally Bet', 'betparx': 'betPARX',
+            'si_sportsbook': 'SI Sportsbook', 'hardrockbet': 'Hard Rock Bet'
         }
         
         game_name = f"{event_data.get('away_team', '')} @ {event_data.get('home_team', '')}"

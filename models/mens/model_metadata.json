@@ -54,105 +54,105 @@
     "visitor_injury_impact"
   ],
   "training_info": {
-    "trained_at": "2026-02-18T13:33:50.475799",
-    "training_samples": 8261,
-    "test_samples": 2066,
+    "trained_at": "2026-02-20T07:52:30.118667",
+    "training_samples": 8348,
+    "test_samples": 2088,
     "features": 52,
     "gender": "mens",
     "top_features": [
       {
         "feature": "elo_diff",
-        "importance": 0.08131655372700872,
-        "std": 0.009714364921047155
-      },
-      {
-        "feature": "visitor_points_scored_last20",
-        "importance": 0.006679574056147141,
-        "std": 0.0020167150683446074
-      },
-      {
-        "feature": "visitor_points_scored_last5",
-        "importance": 0.004549854791868357,
-        "std": 0.003100797169031367
-      },
-      {
-        "feature": "visitor_points_scored_last10",
-        "importance": 0.004453049370764783,
-        "std": 0.003201904241731109
-      },
-      {
-        "feature": "home_point_diff_last5",
-        "importance": 0.004162633107454039,
-        "std": 0.001926403556837592
-      },
-      {
-        "feature": "home_points_scored_last20",
-        "importance": 0.003969022265246846,
-        "std": 0.000711371658117111
-      },
-      {
-        "feature": "home_elo",
-        "importance": 0.0038722168441432726,
-        "std": 0.0005302251282721821
+        "importance": 0.0809386973180077,
+        "std": 0.007351181553390764
       },
       {
         "feature": "visitor_elo",
-        "importance": 0.0032913843175217837,
-        "std": 0.0007744433688286395
-      },
-      {
-        "feature": "momentum_diff_5",
-        "importance": 0.0030009680542110394,
-        "std": 0.00116166505324297
-      },
-      {
-        "feature": "visitor_point_diff_last10",
-        "importance": 0.002613746369796699,
-        "std": 0.0008439300955548393
-      },
-      {
-        "feature": "home_point_diff_last10",
-        "importance": 0.002323330106485977,
-        "std": 0.0016598672022732038
-      },
-      {
-        "feature": "home_win_pct_last5",
-        "importance": 0.0021297192642788067,
-        "std": 0.0011289355072304484
-      },
-      {
-        "feature": "home_win_pct_last20",
-        "importance": 0.0018393030009680623,
-        "std": 0.000564467753615228
-      },
-      {
-        "feature": "h2h_avg_margin",
-        "importance": 0.0017424975798644659,
-        "std": 0.0018771267598901515
+        "importance": 0.0030651340996169065,
+        "std": 0.0028349901507564524
       },
       {
         "feature": "visitor_point_diff_last5",
-        "importance": 0.0014520813165537216,
-        "std": 0.0017850037671428402
+        "importance": 0.002586206896551779,
+        "std": 0.003838594810251726
+      },
+      {
+        "feature": "net_rating_diff",
+        "importance": 0.0016283524904214808,
+        "std": 0.0015325670498084407
+      },
+      {
+        "feature": "visitor_points_scored_last10",
+        "importance": 0.0015325670498084643,
+        "std": 0.0015265687213131698
+      },
+      {
+        "feature": "visitor_points_allowed_last10",
+        "importance": 0.001340996168582409,
+        "std": 0.0021289378133039437
+      },
+      {
+        "feature": "home_points_allowed_last20",
+        "importance": 0.000574712643678188,
+        "std": 0.001948945397449827
+      },
+      {
+        "feature": "season_phase",
+        "importance": 0.0002873563218391162,
+        "std": 0.00023462545428960563
+      },
+      {
+        "feature": "vegas_implied_home_prob",
+        "importance": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "h2h_home_wins",
+        "importance": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "injury_impact_diff",
+        "importance": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "vegas_has_odds",
+        "importance": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "visitor_is_b2b",
+        "importance": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "vegas_ml_away",
+        "importance": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "vegas_total",
+        "importance": 0.0,
+        "std": 0.0
       }
     ],
     "metrics": {
-      "home_score_test_mae": 8.508337961008692,
-      "visitor_score_test_mae": 8.253460191741466,
-      "winner_test_accuracy": 0.6597289448209099,
-      "winner_test_brier": 0.21381799593860285,
-      "winner_test_logloss": 0.6504821483750155,
-      "winner_cv_mean_accuracy": 0.696656976744186,
-      "winner_cv_std": 0.03173334958577391,
+      "home_score_test_mae": 8.521875086960602,
+      "visitor_score_test_mae": 8.286752433121661,
+      "winner_test_accuracy": 0.6566091954022989,
+      "winner_test_brier": 0.2154243526357371,
+      "winner_test_logloss": 0.6686872031450913,
+      "winner_cv_mean_accuracy": 0.7000718907260964,
+      "winner_cv_std": 0.030623761694809768,
       "winner_cv_folds": [
-        0.6700581395348837,
-        0.657703488372093,
-        0.6882267441860465,
-        0.7347383720930233,
-        0.7325581395348837
+        0.6829618979151689,
+        0.6542056074766355,
+        0.6959022286125089,
+        0.7304097771387491,
+        0.7368799424874192
       ],
-      "winner_train_accuracy": 0.8507335137444808,
-      "train_test_gap": 0.19100456892357087
+      "winner_train_accuracy": 0.8514446793516561,
+      "train_test_gap": 0.19483548394935724
     }
   }
 }
