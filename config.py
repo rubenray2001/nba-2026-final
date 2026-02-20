@@ -15,6 +15,12 @@ except Exception:
 ODDS_API_KEY = _secrets.get("ODDS_API_KEY", os.environ.get("ODDS_API_KEY", "a3dd82c243fd40b0231a81777e360d83"))
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
 
+# Preferred Bookmakers (for display sorting)
+PREFERRED_BOOKS = [
+    "FanDuel", "DraftKings", "Bovada", "Caesars", "BetMGM", 
+    "Fanatics", "BetRivers", "Bet365", "Unibet", "William Hill"
+]
+
 # ESPN API (No key required - public endpoints)
 ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball"
 ESPN_MENS = "mens-college-basketball"

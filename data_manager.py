@@ -14,14 +14,12 @@ from odds_api_client import TheOddsAPIClient
 import config
 
 # Fix Windows console encoding issues
-if sys.platform == 'win32':
-    try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-    except AttributeError:
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+# Fix Windows console encoding issues
+# Fix Windows console encoding issues
+# Fix Windows console encoding issues
+# Fix Windows console encoding issues - REMOVED to prevent Streamlit conflicts
+# Streamlit handles stdout capture, and reconfigure() breaks it.
+pass
 
 
 class DataManager:
@@ -173,7 +171,10 @@ class DataManager:
         if target_date is None:
             target_date = datetime.now().strftime("%Y-%m-%d")
         
-        print(f"Fetching {self.gender} games for {target_date}")
+        try:
+            print(f"Fetching {self.gender} games for {target_date}")
+        except ValueError:
+            pass
         games = self.client.get_games(dates=[target_date])
         df = pd.DataFrame(games)
         return df
@@ -192,7 +193,10 @@ class DataManager:
                 }
         
         try:
-            print(f"   Fetching {self.gender} odds from The Odds API...")
+            try:
+                print(f"   Fetching {self.gender} odds from The Odds API...")
+            except ValueError:
+                pass
             raw_odds = self.odds_client.get_odds()
             
             if raw_odds:

@@ -1,3 +1,18 @@
+import sys
+import io
+
+# Global safety: Redirect stdout/stderr to prevent "closed file" crashes in environments where
+# Streamlit's capture system is unstable. Rogue prints in dependencies will now be safe.
+class SafeStream(io.TextIOBase):
+    def write(self, s):
+        return len(s) # Standard TextIOBase behavior
+    def flush(self):
+        pass
+
+# Initialize immediately to protect all subsequent imports
+sys.stdout = SafeStream()
+sys.stderr = SafeStream()
+
 """
 Streamlit App - Elite College Basketball Predictions
 Beautiful UI matching NBA model design with Men's/Women's toggle
@@ -11,7 +26,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
-import sys
 import re
 import json
 
@@ -391,7 +405,7 @@ def get_vegas_odds(gender: str, target_date: str, games_df=None):
 
 
 @st.cache_data(ttl=600)
-def get_all_player_props(gender: str, _v: int = 5):
+def get_all_player_props(gender: str, _v: int = 6):
     """Fetch player props from ALL sources: Odds API, PrizePicks, Underdog Fantasy
     _v param is a cache-busting version; bump when upstream parsers change."""
     try:
@@ -400,7 +414,7 @@ def get_all_player_props(gender: str, _v: int = 5):
             include_odds_api=True,
             include_prizepicks=True,
             include_underdog=True,
-            odds_api_max_events=8,
+            odds_api_max_events=24,
         )
         return results
     except Exception as e:
@@ -2263,6 +2277,7 @@ def _render_comparison_card(comp):
         "Bovada": "#CC0000", "DraftKings": "#53D337", "FanDuel": "#1493FF",
         "BetMGM": "#C4A962", "Caesars": "#00473E", "BetRivers": "#003DA5",
         "PrizePicks": "#8B5CF6", "Underdog Fantasy": "#F59E0B",
+        "BetOnline": "#00F3FF", "BetUS": "#1E40AF", "Fanatics": "#FACC15",
     }
     
     for src_name, src_data in comp["sources"].items():
@@ -2306,9 +2321,14 @@ padding: 4px 10px; margin: 2px 4px 2px 0; min-width: 100px; text-align: center;"
     under_juice_total = 0
     juice_count = 0
     
+    # Track lines for middling detection
+    over_lines = []
+    under_lines = []
+    
     for src_name, src_data in comp["sources"].items():
         over = src_data.get("over_odds")
         under = src_data.get("under_odds")
+        line = src_data.get("line")
         
         # Fill defaults for DFS
         if src_name == "PrizePicks" and (over is None or (isinstance(over, float) and pd.isna(over))):
@@ -2325,16 +2345,39 @@ padding: 4px 10px; margin: 2px 4px 2px 0; min-width: 100px; text-align: center;"
             # More negative = more juice = books expect that side to hit
             if over_val < under_val:
                 over_votes += 1
+                if line: over_lines.append(float(line))
             elif under_val < over_val:
                 under_votes += 1
+                if line: under_lines.append(float(line))
             over_juice_total += over_val
             under_juice_total += under_val
             juice_count += 1
         elif has_over:
             over_juice_total += int(over)
             juice_count += 1
+            
+    # Detect Middling (Over on low, Under on high)
+    is_middling = False
+    if over_lines and under_lines:
+        max_over_line = max(over_lines)
+        min_under_line = min(under_lines)
+        # If books favor Over X and Under Y, and X < Y, that's a middle
+        if max_over_line < min_under_line:
+            is_middling = True
     
-    if juice_count > 0:
+    if is_middling:
+        verdict = f"↕️ <b>Middling Opportunity</b>"
+        sub_text = f"Books favor Over {max(over_lines)} & Under {min(under_lines)}"
+        side_color = "#FFA500" # Orange for caution/opportunity
+        
+        verdict_html = f"""
+<div style="margin-top: 6px; padding: 5px 10px; background: {side_color}15; border-left: 3px solid {side_color};
+border-radius: 0 4px 4px 0;">
+<span style="color: {side_color}; font-family: JetBrains Mono; font-size: 0.78rem;">{verdict}</span>
+<span style="color: #AAA; font-size: 0.68rem; margin-left: 8px;">({sub_text})</span>
+</div>"""
+
+    elif juice_count > 0:
         avg_over = over_juice_total / juice_count
         avg_under = under_juice_total / juice_count if under_juice_total != 0 else 0
         
@@ -2353,9 +2396,9 @@ padding: 4px 10px; margin: 2px 4px 2px 0; min-width: 100px; text-align: center;"
             side_emoji = "⚖️"
         
         if side != "TOSS-UP":
-            if diff >= 15:
+            if diff >= 20:
                 strength = "Strong"
-            elif diff >= 5:
+            elif diff >= 10:
                 strength = "Lean"
             else:
                 strength = "Slight lean"
@@ -3019,4 +3062,10 @@ grid-template-columns: 40px 30px 44px 1fr 70px 80px 80px; gap: 8px; align-items:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        st.error(f"CRITICAL ERROR: {e}")
+        st.text(traceback.format_exc())
+        traceback.print_exc()
