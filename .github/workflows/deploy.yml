@@ -9,16 +9,15 @@ env:
   PROJECT_ID: gen-lang-client-0522115539
   SERVICE: nba
   REGION: us-central1
-  IMAGE: gcr.io/gen-lang-client-0522115539/nba
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Build & Deploy via Cloud Build
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
-      id-token: write  # Required for Workload Identity Federation
+      id-token: write
 
     steps:
       - name: Checkout code
@@ -34,28 +33,20 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker --quiet
-
-      - name: Build Docker image
-        run: docker build -t $IMAGE .
-
-      - name: Push Docker image
-        run: docker push $IMAGE
-
-      - name: Deploy to Cloud Run
+      - name: Enable required APIs
         run: |
-          gcloud run deploy $SERVICE \
-            --image $IMAGE \
-            --region $REGION \
-            --platform managed \
-            --allow-unauthenticated \
-            --memory 2Gi \
-            --cpu 2 \
-            --quiet
+          gcloud services enable cloudbuild.googleapis.com run.googleapis.com containerregistry.googleapis.com --project=$PROJECT_ID
+
+      - name: Submit build to Cloud Build
+        run: |
+          gcloud builds submit \
+            --config cloudbuild.yaml \
+            --project $PROJECT_ID \
+            .
 
       - name: Show Service URL
         run: |
           gcloud run services describe $SERVICE \
             --region $REGION \
+            --project $PROJECT_ID \
             --format "value(status.url)"
