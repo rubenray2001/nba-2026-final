@@ -501,7 +501,7 @@ class EliteEnsembleModel:
         raw_model_spread = raw_home_scores - raw_visitor_scores
         blended_spread = np.where(
             vegas_has_odds.values > 0,
-            VEGAS_SPREAD_WEIGHT * vegas_spread.values + MODEL_SPREAD_WEIGHT * raw_model_spread,
+            VEGAS_SPREAD_WEIGHT * (-vegas_spread.values) + MODEL_SPREAD_WEIGHT * raw_model_spread,
             raw_model_spread
         )
         

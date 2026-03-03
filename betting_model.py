@@ -1,5 +1,5 @@
 """
-Betting Model - Specialized predictions for ML, Spread, Totals
+Betting Model - Specialized predictions for ML, Spread (Reg), Totals (Reg)
 """
 
 import joblib
@@ -20,6 +20,7 @@ class BettingModel:
         self.feature_names = []
         self.loaded = False
         self.results = {}
+        self.model_type = 'classification'  # Default to old style
     
     def load(self, models_dir='models'):
         """Load betting models"""
@@ -43,9 +44,10 @@ class BettingModel:
                 metadata = json.load(f)
                 self.feature_names = metadata.get('feature_names', [])
                 self.results = metadata.get('results', {})
+                self.model_type = metadata.get('model_type', 'classification')
             
             self.loaded = True
-            print(f"Betting models loaded ({len(self.feature_names)} features)")
+            print(f"Betting models loaded ({self.model_type}, {len(self.feature_names)} features)")
             return True
             
         except Exception as e:
@@ -55,11 +57,6 @@ class BettingModel:
     def predict(self, features_df):
         """
         Make betting predictions
-        
-        Returns dict with:
-        - ml_home_prob: Probability home wins (moneyline)
-        - spread_home_prob: Probability home covers spread
-        - over_prob: Probability game goes over
         """
         
         if not self.loaded:
@@ -71,168 +68,166 @@ class BettingModel:
             if col in features_df.columns:
                 data[col] = features_df[col].values
             else:
-                # Use feature-appropriate defaults instead of blanket 0
-                if 'elo' in col.lower():
-                    data[col] = [1500] * len(features_df)
-                elif 'win_pct' in col.lower():
-                    data[col] = [0.5] * len(features_df)
-                elif 'efg_pct' in col.lower():
-                    data[col] = [0.54] * len(features_df)
-                elif 'tov_pct' in col.lower():
-                    data[col] = [0.13] * len(features_df)
-                elif 'oreb_pct' in col.lower():
-                    data[col] = [0.25] * len(features_df)
-                elif 'ftr' in col.lower() and 'last' in col.lower():
-                    data[col] = [0.20] * len(features_df)
-                elif 'points_scored' in col.lower():
-                    data[col] = [110] * len(features_df)
-                elif 'points_allowed' in col.lower():
-                    data[col] = [110] * len(features_df)
-                elif 'pace' in col.lower():
-                    data[col] = [98] * len(features_df)
-                elif 'rest_days' in col.lower():
-                    data[col] = [2] * len(features_df)
-                elif 'vegas_total' in col.lower():
-                    data[col] = [220.0] * len(features_df)
-                elif 'vegas_implied' in col.lower():
-                    data[col] = [0.5] * len(features_df)
-                elif 'h2h_home_win_pct' in col.lower() or 'h2h_last3' in col.lower():
-                    data[col] = [0.5] * len(features_df)
-                else:
-                    data[col] = [0] * len(features_df)
+                # smart defaults
+                if 'elo' in col.lower(): data[col] = [1500] * len(features_df)
+                elif 'win_pct' in col.lower(): data[col] = [0.5] * len(features_df)
+                elif 'points' in col.lower(): data[col] = [110] * len(features_df)
+                elif 'pace' in col.lower(): data[col] = [0] * len(features_df)  # centered
+                elif 'volatility' in col.lower(): data[col] = [10] * len(features_df)
+                else: data[col] = [0] * len(features_df)
         
         X = pd.DataFrame(data, index=features_df.index)
-        # Fill any remaining NaN with same smart logic
-        fill_defaults = {}
-        for col in X.columns:
-            if 'elo' in col.lower(): fill_defaults[col] = 1500
-            elif 'win_pct' in col.lower(): fill_defaults[col] = 0.5
-            elif 'vegas_total' in col.lower(): fill_defaults[col] = 220.0
-            elif 'vegas_implied' in col.lower(): fill_defaults[col] = 0.5
-            else: fill_defaults[col] = 0
-        X.fillna(fill_defaults, inplace=True)
+        X.fillna(0, inplace=True)
         
         # Scale
-        X_scaled = self.scaler.transform(X)
-        
-        # Raw model predictions
+        try:
+            X_scaled = self.scaler.transform(X)
+        except Exception as e:
+            print(f"Scaling error: {e}")
+            return None
+            
         results = {}
         
-        # =====================================================================
-        # VEGAS-ANCHORED BLENDING for betting model
-        # Same rationale as model_engine.py: model was trained on zero Vegas,
-        # so we blend raw model output with Vegas implied probabilities.
-        # =====================================================================
-        VEGAS_WEIGHT = 0.70
-        MODEL_WEIGHT = 0.30
+        # VEGAS DATA extraction (defaults if missing)
+        vegas_has_odds = features_df.get('vegas_has_odds', pd.Series([0]*len(X))).fillna(0).values
+        vegas_spread = features_df.get('vegas_spread_home', pd.Series([0.0]*len(X))).fillna(0.0).values
+        vegas_total = features_df.get('vegas_total', pd.Series([220.0]*len(X))).fillna(220.0).values
+        vegas_ml_prob = features_df.get('vegas_implied_home_prob', pd.Series([0.5]*len(X))).fillna(0.5).values
         
-        # Extract Vegas features from input
-        vegas_implied = features_df.get('vegas_implied_home_prob', pd.Series([0.5] * len(features_df), index=features_df.index)).fillna(0.5).values
-        vegas_has_odds = features_df.get('vegas_has_odds', pd.Series([0] * len(features_df), index=features_df.index)).fillna(0).values
-        vegas_spread = features_df.get('vegas_spread_home', pd.Series([0.0] * len(features_df), index=features_df.index)).fillna(0.0).values
-        vegas_total_val = features_df.get('vegas_total', pd.Series([220.0] * len(features_df), index=features_df.index)).fillna(220.0).values
+        # 1. MONEYLINE (Classifier) - UNTOUCHED
+        # ---------------------------------------------------------------------
+        try:
+            raw_ml_probs = self.ml_model.predict_proba(X_scaled)[:, 1]
+            
+            # Blend ML with Vegas (70% Vegas, 30% Model)
+            blended_ml = np.where(
+                vegas_has_odds > 0,
+                0.70 * vegas_ml_prob + 0.30 * raw_ml_probs,
+                raw_ml_probs
+            )
+            results['ml_home_prob'] = blended_ml
+            results['ml_pick'] = np.where(blended_ml > 0.5, 'HOME', 'AWAY')
+            results['ml_confidence'] = np.maximum(blended_ml, 1 - blended_ml)
+        except Exception as e:
+            print(f"ML Prediction error: {e}")
+            results['ml_home_prob'] = [0.5] * len(X)
+            results['ml_pick'] = ['HOME'] * len(X)
+            results['ml_confidence'] = [0.5] * len(X)
         
-        # Moneyline: blend with Vegas implied prob
-        raw_ml_probs = self.ml_model.predict_proba(X_scaled)[:, 1]
-        blended_ml = np.where(
-            vegas_has_odds > 0,
-            VEGAS_WEIGHT * vegas_implied + MODEL_WEIGHT * raw_ml_probs,
-            raw_ml_probs
-        )
-        blended_ml = np.clip(blended_ml, 0.05, 0.95)
-        
-        results['ml_home_prob'] = blended_ml
-        results['ml_pick'] = np.where(blended_ml > 0.5, 'HOME', 'AWAY')
-        results['ml_confidence'] = np.maximum(blended_ml, 1 - blended_ml)
-        
-        # Spread: The Vegas spread line is SET so both sides have ~50% cover probability.
-        # Don't convert spread to cover probability (0.5 + spread*0.03 is WRONG for ATS —
-        # that formula estimates WIN probability, not cover probability).
-        # Instead, anchor at 50% and let the model's signal adjust.
-        raw_spread_probs = self.spread_model.predict_proba(X_scaled)[:, 1]
-        
-        # Anchor at 50% (the spread IS the 50/50 point), shrink model toward it
-        # This gives: blended = 0.5 + 0.55 * (raw - 0.5) when Vegas odds exist
-        blended_spread = np.where(
-            vegas_has_odds > 0,
-            0.45 * 0.5 + 0.55 * raw_spread_probs,
-            raw_spread_probs
-        )
-        blended_spread = np.clip(blended_spread, 0.05, 0.95)
-        
-        results['spread_home_prob'] = blended_spread
-        results['spread_pick'] = np.where(blended_spread > 0.5, 'HOME', 'AWAY')
-        results['spread_confidence'] = np.maximum(blended_spread, 1 - blended_spread)
-        
-        # Totals: blend model with naive Vegas total anchor (50/50 baseline)
-        raw_total_probs = self.totals_model.predict_proba(X_scaled)[:, 1]
-        # Model output alone for totals (Vegas total is already in the features,
-        # and there's no clean implied over/under probability from the line)
-        results['over_prob'] = raw_total_probs
-        results['total_pick'] = np.where(raw_total_probs > 0.5, 'OVER', 'UNDER')
-        results['total_confidence'] = np.maximum(raw_total_probs, 1 - raw_total_probs)
+        # 2. SPREAD (Regressor)
+        # ---------------------------------------------------------------------
+        # Model predicts MARGIN (Home - Visitor). e.g., +8 means Home wins by 8.
+        try:
+            pred_margin = self.spread_model.predict(X_scaled)
+            
+            # Spread logic:
+            # Vegas Spread is usually negative for favorites (e.g. -5.5)
+            # We cover if (Actual Margin + Spread) > 0
+            # So we predict cover if (Predicted Margin + Vegas Spread) > 0
+            
+            predicted_cover_margin = pred_margin + vegas_spread
+            
+            # Probability approximation (sigmoidish)
+            # If cover margin is 0, prob is 50%. If +10, prob is high.
+            results['spread_home_prob'] = 1 / (1 + np.exp(-0.15 * predicted_cover_margin))
+            results['spread_pick'] = np.where(predicted_cover_margin > 0, 'HOME', 'AWAY')
+            
+            # Confidence is based on how far the margin is from 0
+            # e.g. covering by 5 points is more confident than covering by 0.5
+            results['spread_confidence'] = 0.50 + (np.abs(predicted_cover_margin) / 20.0)
+            results['spread_confidence'] = np.clip(results['spread_confidence'], 0.5, 0.95)
+            
+            results['pred_spread_margin'] = pred_margin
+            results['cover_margin'] = predicted_cover_margin
+            
+        except Exception as e:
+            print(f"Spread Prediction error: {e}")
+    
+        # 3. TOTALS (Regressor)
+        # ---------------------------------------------------------------------
+        try:
+            pred_total = self.totals_model.predict(X_scaled)
+            
+            # Total logic:
+            # Diff = Predicted Total - Vegas Total
+            total_diff = pred_total - vegas_total
+            
+            # Probability approximation
+            results['over_prob'] = 1 / (1 + np.exp(-0.15 * total_diff))
+            results['total_pick'] = np.where(total_diff > 0, 'OVER', 'UNDER')
+            
+            # Confidence based on point diff
+            results['total_confidence'] = 0.50 + (np.abs(total_diff) / 20.0)
+            results['total_confidence'] = np.clip(results['total_confidence'], 0.5, 0.95)
+            
+            results['pred_total_points'] = pred_total
+            results['total_diff'] = total_diff
+            
+        except Exception as e:
+            print(f"Totals Prediction error: {e}")
         
         return pd.DataFrame(results, index=features_df.index)
     
     def get_betting_recommendation(self, features, vegas_spread=None, vegas_total=None):
         """
         Get betting recommendation for a single game
-        
-        Returns dict with picks and confidence
         """
-        
         if not self.loaded:
-            return {
-                'ml_pick': None,
-                'spread_pick': None,
-                'total_pick': None,
-                'has_edge': False
-            }
+            return {'has_edge': False}
         
-        # Convert to DataFrame if dict
-        if isinstance(features, dict):
+        # Convert to DataFrame
+        if isinstance(features, pd.DataFrame):
+            features_df = features
+        elif isinstance(features, dict):
             features_df = pd.DataFrame([features])
         else:
             features_df = features.to_frame().T if hasattr(features, 'to_frame') else pd.DataFrame([features])
-        
+            
         preds = self.predict(features_df)
-        
         if preds is None or preds.empty:
-            return {
-                'ml_pick': None,
-                'spread_pick': None, 
-                'total_pick': None,
-                'has_edge': False
-            }
-        
+            return {'has_edge': False}
+            
         row = preds.iloc[0]
         
         result = {
-            # Moneyline
-            'ml_pick': row['ml_pick'],
-            'ml_home_prob': row['ml_home_prob'],
-            'ml_confidence': row['ml_confidence'],
-            'ml_is_confident': row['ml_confidence'] >= 0.60,
+            'has_edge': False,
+            'ml_pick': row.get('ml_pick'),
+            'ml_confidence': row.get('ml_confidence', 0.5),
+            'ml_is_confident': False,
             
-            # Spread
-            'spread_pick': row['spread_pick'],
-            'spread_home_prob': row['spread_home_prob'],
-            'spread_confidence': row['spread_confidence'],
-            'spread_is_confident': row['spread_confidence'] >= 0.55,
+            'spread_pick': row.get('spread_pick'),
+            'spread_edge': 0.0,
+            'spread_confidence': row.get('spread_confidence', 0.5),
+            'spread_is_confident': False,
             
-            # Totals
-            'total_pick': row['total_pick'],
-            'over_prob': row['over_prob'],
-            'total_confidence': row['total_confidence'],
-            'total_is_confident': row['total_confidence'] >= 0.55,
-            
-            # Has any edge?
-            'has_edge': (
-                row['ml_confidence'] >= 0.60 or
-                row['spread_confidence'] >= 0.55 or
-                row['total_confidence'] >= 0.55
-            )
+            'total_pick': row.get('total_pick'),
+            'total_edge': 0.0,
+            'total_confidence': row.get('total_confidence', 0.5),
+            'total_is_confident': False
         }
+
+        # Check edges (Regression Logic)
+        if 'cover_margin' in row:
+             result['spread_edge'] = abs(row['cover_margin'])
+             
+        if 'total_diff' in row:
+             result['total_edge'] = abs(row['total_diff'])
+
+        # Logic for "confident"
+        # Moneyline: > 60% probability
+        if result['ml_confidence'] >= 0.60:
+            result['ml_is_confident'] = True
+            
+        # Spread: > 2.5 points edge (approx one possession)
+        if result['spread_edge'] >= 2.5:
+            result['spread_is_confident'] = True
+            
+        # Total: > 3.5 points edge
+        if result['total_edge'] >= 3.5:
+            result['total_is_confident'] = True
+            
+        if result['ml_is_confident'] or result['spread_is_confident'] or result['total_is_confident']:
+            result['has_edge'] = True
         
         return result
     

@@ -2,6 +2,7 @@
 Data Manager - Orchestrates data collection and caching
 """
 import os
+import sys
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict
@@ -9,6 +10,17 @@ import json
 from api_client import BallDontLieClient
 from odds_api_client import TheOddsAPIClient
 import config
+
+# Fix Windows console encoding issues that cause OSError: [Errno 22] on print
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except AttributeError:
+        # Python < 3.7 fallback
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
 class DataManager:

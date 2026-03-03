@@ -348,3 +348,95 @@ class PredictionTracker:
                 
                 if home_score and visitor_score:
                     self.update_result(game_id, home_score, visitor_score)
+
+    def update_pending_games(self, data_manager):
+        """
+        Identify predictions without results and update them from API.
+        This fixes gaps where the user didn't open the app for a few days.
+        """
+        pending_ids = []
+        for game_id, pred in self.predictions["games"].items():
+            if pred.get("result") is None:
+                pending_ids.append(int(game_id))
+        
+        if not pending_ids:
+            return 0
+            
+        print(f"Found {len(pending_ids)} pending games. Fetching updates...")
+        
+        # OpenClaw/BaliDontLie API allows fetching by IDs
+        # We'll do it in batches of 100
+        updated_count = 0
+        batch_size = 100
+        
+        for i in range(0, len(pending_ids), batch_size):
+            batch = pending_ids[i:i + batch_size]
+            try:
+                # Use client directly to fetch specific games
+                games = data_manager.client.get_games(team_ids=None, seasons=None, dates=None, per_page=100)
+                # Wait, get_games doesn't support list of IDs natively in the wrapper above? 
+                # deeper check: api_client.get_box_scores does, but get_games doesn't seem to expose 'game_ids' param in the wrapper signature
+                # But the API supports it. Let's use get_box_scores or just fetch by ID loop if needed.
+                # Actually, api_client.get_games DOES NOT have game_ids param.
+                # But api_client.get_game_by_id does.
+                # If we have many, looping get_game_by_id is slow.
+                # Smart approach: Fetch box scores for these games? get_box_scores takes game_ids!
+                # And box scores contain scores.
+                
+                # Fetch box scores (which implies Final status usually, but we need scores)
+                # Actually, data_manager.fetch_box_scores logic?
+                # Let's try to find them by DATE.
+                
+                # Group pending games by date to minimize API calls
+                games_by_date = {}
+                for gid in batch:
+                    # predictions only track 'predicted_at', not game date explicitly? 
+                    # Wait, we prefer to have game date.
+                    # 'predicted_at' is close to game date.
+                    pred = self.predictions["games"].get(str(gid))
+                    if pred:
+                        # Guess date from predicted_at.
+                        # CRITICAL FIX: Game might be scheduled for "tomorrow" in UTC vs local time
+                        # or prediction was made days ago. 
+                        # To be safe, we should check the predicted_date AND the next day.
+                        # Actually, looking at the code, we group by date.
+                        # Users often predict on day X, game is on day X or X+1.
+                        # Let's try to find the game_date if stored? No, we don't store game_date in prediction.
+                        # We only have predicted_at.
+                        # Let's assume prediction is close to game day.
+                        
+                        d_str = pred['predicted_at'][:10]
+                        d_date = datetime.strptime(d_str, "%Y-%m-%d")
+                        
+                        # Add d_str
+                        if d_str not in games_by_date:
+                            games_by_date[d_str] = []
+                        games_by_date[d_str].append(gid)
+                        
+                        # Add d_str + 1 day (just in case game is next day)
+                        d_next = (d_date + timedelta(days=1)).strftime("%Y-%m-%d")
+                        if d_next not in games_by_date:
+                            games_by_date[d_next] = []
+                        games_by_date[d_next].append(gid)
+                
+                for date_str, gids in games_by_date.items():
+                    # Fetch games for this date
+                    daily_games = data_manager.client.get_games(dates=[date_str], per_page=100)
+                    for game in daily_games:
+                        if game['id'] in gids and game['status'] == 'Final':
+                            self.update_result(
+                                game['id'],
+                                game['home_team_score'],
+                                game['visitor_team_score']
+                            )
+                            updated_count += 1
+                            
+            except Exception as e:
+                print(f"Error updating pending games: {e}")
+                continue
+                
+        if updated_count > 0:
+            print(f"Successfully backfilled {updated_count} game results.")
+            self._save_predictions()
+            
+        return updated_count

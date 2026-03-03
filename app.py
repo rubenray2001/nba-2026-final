@@ -400,6 +400,20 @@ def inject_custom_css():
         .stTabs [data-baseweb="tab-border"] {
             display: none;
         }
+        
+        /* White text for radio buttons (Conference filter) */
+        .stRadio label,
+        .stRadio div[role="radiogroup"] label,
+        .stRadio > label,
+        .stRadio p,
+        .stRadio span,
+        .stRadio div,
+        div[data-testid="stRadio"] label,
+        div[data-testid="stRadio"] p,
+        div[data-testid="stRadio"] span,
+        div[data-testid="stRadio"] div {
+            color: #FFFFFF !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -493,11 +507,24 @@ def get_box_scores(target_date):
 def get_player_props():
     """Fetch NBA player props from The Odds API"""
     try:
-        client = TheOddsAPIClient()
-        props = client.get_player_props()
+        odds_client = TheOddsAPIClient()
+        props = odds_client.get_player_props()
         return props
     except Exception as e:
         print(f"Error fetching player props: {e}")
+        return []
+
+
+@st.cache_data(ttl=1800)
+def get_nba_standings(season: int):
+    """Fetch NBA standings for power rankings display"""
+    try:
+        from api_client import BallDontLieClient
+        client = BallDontLieClient()
+        standings = client.get_standings(season)
+        return standings
+    except Exception as e:
+        print(f"Error fetching standings: {e}")
         return []
 
 
@@ -1131,20 +1158,20 @@ def display_game_card(game, odds_df, features, injuries=None, box_scores=None, b
     status = game.get('status', '')
     time_str = game.get('time', '')
     
-    # Timezone Fix: Convert UTC string to Eastern Time (NBA standard)
+    # Timezone Fix: Convert UTC string to Pacific Time (California)
     game_time_display = status
     if 'T' in status and 'Z' in status:
         try:
             from zoneinfo import ZoneInfo
             dt_utc = datetime.strptime(status, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=ZoneInfo("UTC"))
-            dt_et = dt_utc.astimezone(ZoneInfo("America/New_York"))
-            game_time_display = dt_et.strftime("%I:%M %p ET")
+            dt_pt = dt_utc.astimezone(ZoneInfo("America/Los_Angeles"))
+            game_time_display = dt_pt.strftime("%I:%M %p PT")
         except Exception:
             try:
-                # Fallback: naive UTC - 5 for EST
+                # Fallback: naive UTC - 8 for PST
                 dt = datetime.strptime(status, "%Y-%m-%dT%H:%M:%SZ")
-                dt_et = dt - timedelta(hours=5)
-                game_time_display = dt_et.strftime("%I:%M %p ET")
+                dt_pt = dt - timedelta(hours=8)
+                game_time_display = dt_pt.strftime("%I:%M %p PT")
             except Exception:
                 pass
             
@@ -1453,6 +1480,17 @@ def main():
             st.cache_resource.clear()
             st.success("Cache cleared!")
             st.rerun()
+            
+        if st.button("🔄 Force Update History", help="Check all past predictions for missing results (fixes stuck accuracy)"):
+            with st.spinner("Checking ALL pending predictions for results... This may take a minute..."):
+                tracker = PredictionTracker()
+                data_mgr = DataManager()
+                updated = tracker.update_pending_games(data_mgr)
+                st.success(f"Updated {updated} past games with final results!")
+                if updated > 0:
+                    st.cache_data.clear()
+                    time.sleep(1) # Let user see message
+                    st.rerun()
         
         st.markdown("---")
         
@@ -1543,7 +1581,26 @@ def main():
                 
                 historical_data = data_mgr.get_complete_training_data([current_season - 1, current_season])
                 
-                # Fetch RECENT games (last 14 days) fresh from API for accurate rest day calculations
+                # =================================================================
+                # CRITICAL: Remove today's games from historical data
+                # When cache clears mid-evening, completed games from tonight
+                # would contaminate ELO/rolling stats and change predictions.
+                # Predictions must be based ONLY on pre-game data.
+                # =================================================================
+                if 'games' in historical_data and not historical_data['games'].empty:
+                    hg = historical_data['games']
+                    # Try to filter by date column
+                    if 'date' in hg.columns:
+                        before_filter = len(hg)
+                        hg = hg[hg['date'].astype(str).str[:10] != target_date_str]
+                        removed = before_filter - len(hg)
+                        if removed > 0:
+                            print(f"Removed {removed} games from target date {target_date_str} to keep predictions stable")
+                        historical_data['games'] = hg
+                
+                # Fetch RECENT games (last 14 days BEFORE target date) fresh from API for accurate rest day calculations
+                # IMPORTANT: Exclude target_date itself to prevent today's completed/in-progress games
+                # from contaminating features and causing prediction drift on cache clears
                 recent_dates = [(target_date - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1, 15)]
                 try:
                     recent_games = data_mgr.client.get_games(dates=recent_dates, per_page=100)
@@ -1557,8 +1614,11 @@ def main():
                             recent_df['visitor_team_score'] = recent_df.get('visitor_team_score', 0)
                             recent_df['season'] = current_season
                             
-                            # Filter to completed games only
+                            # Filter to completed games only AND exclude target date games
                             recent_df = recent_df[recent_df['status'] == 'Final'].copy()
+                            # Double-check: remove any games from today that may have snuck in
+                            if 'date' in recent_df.columns:
+                                recent_df = recent_df[recent_df['date'].astype(str).str[:10] != target_date_str]
                             
                             # Merge with historical data (remove duplicates by game id)
                             if 'games' in historical_data and not historical_data['games'].empty:
@@ -1756,7 +1816,7 @@ def main():
         accuracy_stats = tracker.get_accuracy_stats(days=30)
         
         # Create tabs for different views
-        tab1, tab2 = st.tabs(["🏀 Game Predictions", "🎯 Player Props"])
+        tab1, tab2, tab3 = st.tabs(["🏀 Game Predictions", "🎯 Player Props", "🏆 Power Rankings"])
         
         with tab1:
             # Display predictions with real accuracy
@@ -1863,6 +1923,150 @@ def main():
                     <div style="color: #FFA500; font-size: 1rem;">⚠️ No Player Props Available</div>
                     <div style="color: #888; font-size: 0.85rem; margin-top: 10px;">
                         Player props may not be available if there are no games today or the API limit was reached.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with tab3:
+            # Power Rankings Tab
+            st.markdown("""
+            <div style="background: linear-gradient(90deg, rgba(255,215,0,0.1), rgba(255,165,0,0.1)); 
+                        border: 1px solid #FFD700; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div style="font-family: JetBrains Mono; color: #FFD700; font-size: 1.1rem; font-weight: bold;">
+                    🏆 NBA Power Rankings
+                </div>
+                <div style="color: #888; font-size: 0.85rem; margin-top: 5px;">
+                    Current standings &amp; team performance metrics
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            current_season_pr = target_date.year if target_date.month >= 10 else target_date.year - 1
+            standings_data = get_nba_standings(current_season_pr)
+            
+            if standings_data:
+                standings_list = []
+                for s in standings_data:
+                    team_info = s.get('team', {})
+                    tid = team_info.get('id', 0)
+                    conf = team_info.get('conference', 'Unknown')
+                    wins = s.get('wins', 0)
+                    losses = s.get('losses', 0)
+                    total_games = wins + losses
+                    win_pct = wins / total_games if total_games > 0 else 0.0
+                    standings_list.append({
+                        'team_id': tid,
+                        'team_name': tl.TEAM_NAMES.get(tid, team_info.get('full_name', 'Unknown')),
+                        'abbreviation': tl.TEAM_ABBREVIATIONS.get(tid, team_info.get('abbreviation', '???')),
+                        'conference': conf,
+                        'wins': wins,
+                        'losses': losses,
+                        'win_pct': win_pct,
+                        'home_record': s.get('home_record', ''),
+                        'road_record': s.get('road_record', ''),
+                        'streak': s.get('streak', ''),
+                        'last_10': s.get('last_ten', ''),
+                        'logo': tl.TEAM_LOGOS.get(tid, ''),
+                        'color': tl.TEAM_COLORS.get(tid, '#444'),
+                    })
+                
+                standings_df = pd.DataFrame(standings_list)
+                standings_df = standings_df.sort_values('win_pct', ascending=False).reset_index(drop=True)
+                
+                # Conference filter
+                conf_filter = st.radio("Conference", ["All", "East", "West"], horizontal=True, key="pr_conf")
+                
+                for conf_label in (['East', 'West'] if conf_filter == 'All' else [conf_filter]):
+                    conf_df = standings_df[standings_df['conference'] == conf_label].reset_index(drop=True)
+                    if conf_df.empty:
+                        continue
+                    
+                    conf_icon = "🔵" if conf_label == "East" else "🔴"
+                    st.markdown(f"""
+                    <div style="font-family: JetBrains Mono; font-size: 1.05rem; font-weight: bold;
+                                color: {'#00B4D8' if conf_label == 'East' else '#FF6B35'};
+                                margin: 20px 0 10px 0; border-bottom: 2px solid {'#00B4D8' if conf_label == 'East' else '#FF6B35'};
+                                padding-bottom: 5px;">
+                        {conf_icon} {conf_label}ern Conference
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Build rows
+                    for rank, (_, team) in enumerate(conf_df.iterrows(), 1):
+                        pct = team['win_pct']
+                        bar_width = int(pct * 100)
+                        
+                        # Tier coloring
+                        if rank <= 3:
+                            rank_color = "#FFD700"
+                            tier_label = "ELITE"
+                        elif rank <= 6:
+                            rank_color = "#00F3FF"
+                            tier_label = "CONTENDER"
+                        elif rank <= 10:
+                            rank_color = "#4CAF50"
+                            tier_label = "PLAYOFF"
+                        else:
+                            rank_color = "#666"
+                            tier_label = ""
+                        
+                        playoff_border = f"border-left: 3px solid {rank_color};" if rank <= 10 else "border-left: 3px solid #333;"
+                        
+                        streak_str = team.get('streak', '')
+                        home_rec = team.get('home_record', '')
+                        road_rec = team.get('road_record', '')
+                        detail_parts = []
+                        if home_rec:
+                            detail_parts.append(f"{home_rec} H")
+                        if road_rec:
+                            detail_parts.append(f"{road_rec} A")
+                        if streak_str:
+                            detail_parts.append(f"🔥 {streak_str}")
+                        detail_line = " | ".join(detail_parts)
+                        
+                        st.markdown(f"""
+<div style="background: #1a1a2e; {playoff_border} border-radius: 6px;
+padding: 10px 14px; margin-bottom: 4px; display: grid;
+grid-template-columns: 40px 44px 1fr 70px 90px 120px; gap: 10px; align-items: center;">
+<div style="color: {rank_color}; font-weight: 900; font-size: 1.2rem; font-family: JetBrains Mono; text-align: center;">{rank}</div>
+<div><img src="{team['logo']}" style="width: 36px; height: 36px;"></div>
+<div>
+<div style="color: #FFF; font-weight: bold; font-size: 0.95rem;">{team['team_name']}</div>
+<div style="color: #888; font-size: 0.7rem;">{detail_line}</div>
+</div>
+<div style="text-align: center;">
+<div style="color: #FFF; font-weight: bold; font-size: 1.05rem;">{team['wins']}-{team['losses']}</div>
+</div>
+<div style="text-align: center;">
+<div style="color: {rank_color}; font-weight: bold; font-size: 1.05rem;">{pct:.3f}</div>
+<div style="color: #666; font-size: 0.65rem;">WIN %</div>
+</div>
+<div>
+<div style="background: #333; border-radius: 4px; height: 8px; overflow: hidden;">
+<div style="background: {team['color']}; width: {bar_width}%; height: 100%; border-radius: 4px;"></div>
+</div>
+{f'<div style="color: {rank_color}; font-size: 0.6rem; text-align: right; margin-top: 2px;">{tier_label}</div>' if tier_label else ''}
+</div>
+</div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Playoff cut line after rank 10
+                    if len(conf_df) > 10:
+                        st.markdown("""
+                        <div style="border-top: 2px dashed #FF5722; margin: 8px 0; position: relative;">
+                            <span style="position: absolute; top: -10px; right: 10px; background: #0E1117;
+                                        color: #FF5722; font-size: 0.7rem; padding: 0 8px; font-family: JetBrains Mono;">
+                                PLAYOFF CUT LINE
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="background: #1a1a2e; border: 1px solid #FFA500; padding: 20px; 
+                            border-radius: 8px; text-align: center;">
+                    <div style="color: #FFA500; font-size: 1rem;">⚠️ Standings data unavailable</div>
+                    <div style="color: #888; font-size: 0.85rem; margin-top: 10px;">
+                        Could not fetch standings from the API. Try refreshing.
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
