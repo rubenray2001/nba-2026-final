@@ -33,10 +33,6 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Enable required APIs
-        run: |
-          gcloud services enable cloudbuild.googleapis.com run.googleapis.com containerregistry.googleapis.com --project=$PROJECT_ID
-
       - name: Submit build to Cloud Build
         run: |
           gcloud builds submit \
