@@ -1,21 +1,8 @@
 import sys
 import io
 
-# Global safety: Redirect stdout/stderr to prevent "closed file" crashes in environments where
-# Streamlit's capture system is unstable. Rogue prints in dependencies will now be safe.
-class SafeStream(io.TextIOBase):
-    def write(self, s):
-        return len(s) # Standard TextIOBase behavior
-    def flush(self):
-        pass
-
-# Initialize immediately to protect all subsequent imports
-sys.stdout = SafeStream()
-sys.stderr = SafeStream()
-
 """
-Streamlit App - Elite College Basketball Predictions
-Beautiful UI matching NBA model design with Men's/Women's toggle
+# CSS and UI Styling
 """
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)

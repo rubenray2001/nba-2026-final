@@ -54,19 +54,105 @@
     "visitor_injury_impact"
   ],
   "training_info": {
-    "trained_at": "2026-02-18T04:09:11.269691",
-    "training_samples": 7787,
-    "test_samples": 1947,
+    "trained_at": "2026-03-02T07:05:13.629606",
+    "training_samples": 8273,
+    "test_samples": 2069,
     "features": 52,
     "gender": "womens",
+    "top_features": [
+      {
+        "feature": "elo_diff",
+        "importance": 0.15572740454325765,
+        "std": 0.006078379863610442
+      },
+      {
+        "feature": "home_elo",
+        "importance": 0.014886418559690685,
+        "std": 0.003919407430200722
+      },
+      {
+        "feature": "net_rating_diff",
+        "importance": 0.0095698405026583,
+        "std": 0.004548396464386105
+      },
+      {
+        "feature": "visitor_elo",
+        "importance": 0.00744320927984532,
+        "std": 0.005764350513629977
+      },
+      {
+        "feature": "home_point_diff_last20",
+        "importance": 0.002803286611889799,
+        "std": 0.0017129091490255628
+      },
+      {
+        "feature": "home_points_allowed_last10",
+        "importance": 0.0024166263895601726,
+        "std": 0.0015284087289359073
+      },
+      {
+        "feature": "visitor_points_scored_last5",
+        "importance": 0.0024166263895601726,
+        "std": 0.001528408728935879
+      },
+      {
+        "feature": "home_points_scored_last5",
+        "importance": 0.0021266312228129802,
+        "std": 0.004264232962805775
+      },
+      {
+        "feature": "visitor_points_scored_last20",
+        "importance": 0.0020299661672305456,
+        "std": 0.0013112286095940647
+      },
+      {
+        "feature": "visitor_points_scored_last10",
+        "importance": 0.0019333011116481557,
+        "std": 0.0016461465795965442
+      },
+      {
+        "feature": "home_points_scored_last10",
+        "importance": 0.0012566457225713147,
+        "std": 0.0005799903334944216
+      },
+      {
+        "feature": "season_phase",
+        "importance": 0.0010633156114065122,
+        "std": 0.0013112286095940497
+      },
+      {
+        "feature": "h2h_games",
+        "importance": 0.0008699855002416879,
+        "std": 0.0008315442500766234
+      },
+      {
+        "feature": "visitor_point_diff_last5",
+        "importance": 0.00048332527791206115,
+        "std": 0.0014975286017234943
+      },
+      {
+        "feature": "momentum_diff_10",
+        "importance": 0.00048332527791206115,
+        "std": 0.0020044892560007375
+      }
+    ],
     "metrics": {
-      "home_score_test_mae": 8.198713183793782,
-      "visitor_score_test_mae": 8.143084346595842,
-      "winner_test_accuracy": 0.7308680020544427,
-      "winner_cv_mean_accuracy": 0.7381649961449499,
-      "winner_cv_std": 0.01877595421085947,
-      "winner_train_accuracy": 0.8803263825929284,
-      "train_test_gap": 0.1494583805384857
+      "home_score_test_mae": 8.0958368939356,
+      "visitor_score_test_mae": 8.083743882474502,
+      "winner_test_accuracy": 0.7249879168680522,
+      "winner_test_brier": 0.17608161949120718,
+      "winner_test_logloss": 0.5846329357622616,
+      "winner_cv_mean_accuracy": 0.7345428156748911,
+      "winner_cv_std": 0.019097630425464078,
+      "winner_cv_folds": [
+        0.706821480406386,
+        0.7409288824383164,
+        0.7177068214804064,
+        0.7525399129172714,
+        0.7547169811320755
+      ],
+      "winner_train_accuracy": 0.8781285551763367,
+      "train_test_gap": 0.1531406383082845
     }
   }
 }
