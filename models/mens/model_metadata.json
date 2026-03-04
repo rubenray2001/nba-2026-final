@@ -54,105 +54,105 @@
     "visitor_injury_impact"
   ],
   "training_info": {
-    "trained_at": "2026-03-03T09:16:49.572561",
-    "training_samples": 8770,
-    "test_samples": 2193,
+    "trained_at": "2026-03-03T22:29:15.049491",
+    "training_samples": 8811,
+    "test_samples": 2203,
     "features": 52,
     "gender": "mens",
     "top_features": [
       {
         "feature": "elo_diff",
-        "importance": 0.08217054263565897,
-        "std": 0.003203678626584644
+        "importance": 0.09214707217430773,
+        "std": 0.008698349208899486
+      },
+      {
+        "feature": "visitor_points_scored_last20",
+        "importance": 0.007807535179300951,
+        "std": 0.00496754027065073
       },
       {
         "feature": "net_rating_diff",
-        "importance": 0.015503875968992298,
-        "std": 0.004808545855527234
-      },
-      {
-        "feature": "home_elo",
-        "importance": 0.005015959872321063,
-        "std": 0.0018690288674800828
-      },
-      {
-        "feature": "visitor_point_diff_last10",
-        "importance": 0.003921568627451033,
-        "std": 0.00120989504436128
-      },
-      {
-        "feature": "visitor_points_scored_last5",
-        "importance": 0.0034655722754218356,
-        "std": 0.0028926131376477418
-      },
-      {
-        "feature": "home_points_scored_last10",
-        "importance": 0.003374373005015996,
-        "std": 0.0012098950443612832
-      },
-      {
-        "feature": "home_point_diff_last10",
-        "importance": 0.0026447788417693465,
-        "std": 0.0027571758245017873
-      },
-      {
-        "feature": "visitor_point_diff_last5",
-        "importance": 0.0024623803009576673,
-        "std": 0.0026369051153307837
+        "importance": 0.00562868815251929,
+        "std": 0.002792293508711701
       },
       {
         "feature": "home_win_pct_last20",
-        "importance": 0.002279981760145966,
-        "std": 0.0018911483222368874
+        "importance": 0.004811620517476167,
+        "std": 0.0019386433503461294
+      },
+      {
+        "feature": "visitor_points_scored_last5",
+        "importance": 0.0042669087607807524,
+        "std": 0.0016138346649687855
+      },
+      {
+        "feature": "home_win_pct_last5",
+        "importance": 0.004085338175215614,
+        "std": 0.002768579333994898
+      },
+      {
+        "feature": "visitor_point_diff_last10",
+        "importance": 0.004085338175215614,
+        "std": 0.002278692764051045
+      },
+      {
+        "feature": "visitor_points_allowed_last10",
+        "importance": 0.002905129369042214,
+        "std": 0.0013648022131977217
+      },
+      {
+        "feature": "momentum_diff_10",
+        "importance": 0.002905129369042214,
+        "std": 0.0025774070933415136
+      },
+      {
+        "feature": "visitor_win_pct_last5",
+        "importance": 0.002451202905129368,
+        "std": 0.0014239116787433605
+      },
+      {
+        "feature": "home_point_diff_last10",
+        "importance": 0.002360417612346799,
+        "std": 0.0015027639906715247
+      },
+      {
+        "feature": "visitor_win_pct_last20",
+        "importance": 0.0021788470267816605,
+        "std": 0.001955575054792375
+      },
+      {
+        "feature": "visitor_points_allowed_last20",
+        "importance": 0.0020880617339990915,
+        "std": 0.0015880940249238217
       },
       {
         "feature": "visitor_elo",
-        "importance": 0.0021887824897401263,
-        "std": 0.0016160551889347436
+        "importance": 0.001906491148433953,
+        "std": 0.004232970758737999
       },
       {
-        "feature": "home_points_scored_last20",
-        "importance": 0.002097583219334309,
-        "std": 0.0037112612766759265
-      },
-      {
-        "feature": "home_points_allowed_last5",
-        "importance": 0.0020063839489284476,
-        "std": 0.002207700581287799
-      },
-      {
-        "feature": "momentum_diff_5",
-        "importance": 0.0019151846785226078,
-        "std": 0.0009300537188495601
-      },
-      {
-        "feature": "home_rest_days",
-        "importance": 0.0018239854081167906,
-        "std": 0.0017303844925681848
-      },
-      {
-        "feature": "home_point_diff_last20",
-        "importance": 0.001732786137710951,
-        "std": 0.0018330826486312563
+        "feature": "h2h_avg_margin",
+        "importance": 0.0016341352700862456,
+        "std": 0.0011696866751452675
       }
     ],
     "metrics": {
-      "home_score_test_mae": 8.437332504407683,
-      "visitor_score_test_mae": 8.262348239056372,
-      "winner_test_accuracy": 0.6703146374829001,
-      "winner_test_brier": 0.2119299447077999,
-      "winner_test_logloss": 0.6256470510674772,
-      "winner_cv_mean_accuracy": 0.7026694045174537,
-      "winner_cv_std": 0.02583826282380468,
+      "home_score_test_mae": 8.42702685036405,
+      "visitor_score_test_mae": 8.254037779626955,
+      "winner_test_accuracy": 0.6654561960962324,
+      "winner_test_brier": 0.20975884675805845,
+      "winner_test_logloss": 0.6202308792448186,
+      "winner_cv_mean_accuracy": 0.7027247956403271,
+      "winner_cv_std": 0.022578841138271036,
       "winner_cv_folds": [
-        0.6817248459958932,
-        0.6673511293634496,
-        0.7070499657768652,
-        0.7405886379192334,
-        0.7166324435318275
+        0.6839237057220708,
+        0.6682561307901907,
+        0.717983651226158,
+        0.7268392370572208,
+        0.7166212534059946
       ],
-      "winner_train_accuracy": 0.8449154816206064,
-      "train_test_gap": 0.17460084413770627
+      "winner_train_accuracy": 0.8449726265188944,
+      "train_test_gap": 0.17951643042266197
     }
   }
 }
