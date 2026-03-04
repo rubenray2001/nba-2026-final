@@ -16,6 +16,7 @@ from sklearn.ensemble import (
 )
 import xgboost as xgb
 from catboost import CatBoostRegressor, CatBoostClassifier
+import os
 # Deep Learning Integration
 if os.environ.get('DISABLE_TENSORFLOW', '0') == '1':
     DL_AVAILABLE = False
@@ -34,7 +35,6 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.frozen import FrozenEstimator
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, accuracy_score, log_loss, brier_score_loss
 import joblib
-import os
 from datetime import datetime
 import config
 
