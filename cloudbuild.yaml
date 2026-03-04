@@ -27,6 +27,8 @@ steps:
       - '2'
       - '--max-instances'
       - '3'
+      - '--set-env-vars'
+      - 'DISABLE_TENSORFLOW=1'
 
 images:
   - 'gcr.io/$PROJECT_ID/nba'

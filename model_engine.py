@@ -17,12 +17,16 @@ from sklearn.ensemble import (
 import xgboost as xgb
 from catboost import CatBoostRegressor, CatBoostClassifier
 # Deep Learning Integration
-try:
-    from models.lstm_model import NBALSTMModel
-    DL_AVAILABLE = True
-except ImportError:
+if os.environ.get('DISABLE_TENSORFLOW', '0') == '1':
     DL_AVAILABLE = False
-    print("Warning: LSTM Model not available (tensorflow/models missing)")
+    print("Info: TensorFlow disabled via DISABLE_TENSORFLOW env var")
+else:
+    try:
+        from models.lstm_model import NBALSTMModel
+        DL_AVAILABLE = True
+    except ImportError:
+        DL_AVAILABLE = False
+        print("Warning: LSTM Model not available (tensorflow/models missing)")
 from sklearn.linear_model import Ridge, LogisticRegression
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
