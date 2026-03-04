@@ -17,17 +17,6 @@ from sklearn.ensemble import (
 import xgboost as xgb
 from catboost import CatBoostRegressor, CatBoostClassifier
 import os
-# Deep Learning Integration
-if os.environ.get('DISABLE_TENSORFLOW', '0') == '1':
-    DL_AVAILABLE = False
-    print("Info: TensorFlow disabled via DISABLE_TENSORFLOW env var")
-else:
-    try:
-        from models.lstm_model import NBALSTMModel
-        DL_AVAILABLE = True
-    except ImportError:
-        DL_AVAILABLE = False
-        print("Warning: LSTM Model not available (tensorflow/models missing)")
 from sklearn.linear_model import Ridge, LogisticRegression
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
@@ -358,8 +347,9 @@ class EliteEnsembleModel:
         return np.array(Xs)
 
     def train_deep_layer(self, training_df):
-        """Train the Deep Learning component"""
-        if not DL_AVAILABLE: return
+        """Train the Deep Learning component (disabled - LSTM not used in production)"""
+        print("INFO: LSTM training disabled in this build")
+        return
         
         print("Training Deep Learning Layer...")
         X, _, _, y_winner = self.prepare_training_data(training_df)
@@ -457,8 +447,6 @@ class EliteEnsembleModel:
         raw_winner_probs = self.winner_ensemble.predict_proba(X_final)[:, 1]
         
         # NOTE: LSTM blending is DISABLED for prediction.
-        if DL_AVAILABLE and self.lstm_model:
-            print("INFO: LSTM model loaded but skipped for prediction (sequences not applicable to independent games)")
         
         # =====================================================================
         # VEGAS-ANCHORED BLENDING
@@ -570,15 +558,7 @@ class EliteEnsembleModel:
         self.winner_ensemble = joblib.load(os.path.join(self.models_dir, 'winner_ensemble.pkl'))
         self.scaler = joblib.load(os.path.join(self.models_dir, 'scaler.pkl'))
         
-        # Load DL
-        if DL_AVAILABLE:
-            dl_path = os.path.join(self.models_dir, 'nba_lstm.keras')
-            if os.path.exists(dl_path):
-                try:
-                    self.lstm_model = NBALSTMModel.load(dl_path)
-                    print("Loaded LSTM model")
-                except Exception as e:
-                    print(f"Failed to load LSTM: {e}")
+        # LSTM loading disabled - not used in production
         
         # Load metadata FIRST (needed for selector validation)
         import json
