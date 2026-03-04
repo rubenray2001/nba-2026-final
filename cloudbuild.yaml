@@ -22,9 +22,11 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--memory'
-      - '4Gi'
+      - '8Gi'
       - '--cpu'
       - '2'
+      - '--max-instances'
+      - '3'
 
 images:
   - 'gcr.io/$PROJECT_ID/nba'
