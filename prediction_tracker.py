@@ -7,6 +7,13 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+_HF_DATASET_REPO = "smelmifinger/college-basketball-tracking"
+_HF_TOKEN = os.environ.get("HF_TOKEN")
+
+
+def _hf_path(gender: str) -> str:
+    return f"data/{gender}/predictions.json"
+
 
 class PredictionTracker:
     def __init__(self, gender: str = "mens", data_dir: str = "data"):
@@ -15,8 +22,41 @@ class PredictionTracker:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.predictions_file = self.data_dir / "predictions.json"
         self.predictions = self._load_predictions()
-    
+
+    def _pull_from_hf(self):
+        """Download predictions from HF dataset repo into local file."""
+        if not _HF_TOKEN:
+            return
+        try:
+            import requests
+            url = (
+                f"https://huggingface.co/datasets/{_HF_DATASET_REPO}"
+                f"/resolve/main/{_hf_path(self.gender)}"
+            )
+            r = requests.get(url, headers={"Authorization": f"Bearer {_HF_TOKEN}"}, timeout=15)
+            if r.status_code == 200:
+                self.predictions_file.write_bytes(r.content)
+        except Exception:
+            pass  # File may not exist yet on first run
+
+    def _push_to_hf(self):
+        """Upload predictions to HF dataset repo for persistence."""
+        if not _HF_TOKEN:
+            return
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=_HF_TOKEN)
+            api.upload_file(
+                path_or_fileobj=str(self.predictions_file),
+                path_in_repo=_hf_path(self.gender),
+                repo_id=_HF_DATASET_REPO,
+                repo_type="dataset",
+            )
+        except Exception:
+            pass
+
     def _load_predictions(self):
+        self._pull_from_hf()
         if self.predictions_file.exists():
             try:
                 with open(self.predictions_file, 'r') as f:
@@ -24,10 +64,11 @@ class PredictionTracker:
             except (json.JSONDecodeError, IOError):
                 return {"games": {}, "stats": {}}
         return {"games": {}, "stats": {}}
-    
+
     def _save_predictions(self):
         with open(self.predictions_file, 'w') as f:
             json.dump(self.predictions, f, indent=2, default=str)
+        self._push_to_hf()
     
     def save_prediction(self, game_id, prediction_data):
         game_key = str(game_id)
