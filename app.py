@@ -1,6 +1,12 @@
 import sys
 import io
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 """
 # CSS and UI Styling
 """
@@ -2742,6 +2748,7 @@ def main():
             updated_count = tracker.update_pending_games(data_mgr_for_tracker)
             if updated_count > 0:
                 print(f"Updated {updated_count} completed game results for {gender}")
+                st.rerun()
         except Exception as e:
             print(f"Warning: Could not update pending game results: {e}")
         

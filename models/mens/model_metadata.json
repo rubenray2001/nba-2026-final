@@ -54,105 +54,105 @@
     "visitor_injury_impact"
   ],
   "training_info": {
-    "trained_at": "2026-03-03T22:29:15.049491",
-    "training_samples": 8811,
-    "test_samples": 2203,
+    "trained_at": "2026-03-26T11:17:31.120748",
+    "training_samples": 9209,
+    "test_samples": 2303,
     "features": 52,
     "gender": "mens",
     "top_features": [
       {
         "feature": "elo_diff",
-        "importance": 0.09214707217430773,
-        "std": 0.008698349208899486
-      },
-      {
-        "feature": "visitor_points_scored_last20",
-        "importance": 0.007807535179300951,
-        "std": 0.00496754027065073
+        "importance": 0.059140251845419003,
+        "std": 0.006695383505825941
       },
       {
         "feature": "net_rating_diff",
-        "importance": 0.00562868815251929,
-        "std": 0.002792293508711701
+        "importance": 0.015631784628745083,
+        "std": 0.0019418740577505952
       },
       {
-        "feature": "home_win_pct_last20",
-        "importance": 0.004811620517476167,
-        "std": 0.0019386433503461294
+        "feature": "h2h_games",
+        "importance": 0.0026052974381241658,
+        "std": 0.0009108196684065347
       },
       {
-        "feature": "visitor_points_scored_last5",
-        "importance": 0.0042669087607807524,
-        "std": 0.0016138346649687855
+        "feature": "visitor_win_pct_last10",
+        "importance": 0.0023447676943117333,
+        "std": 0.0023399380955809747
       },
       {
-        "feature": "home_win_pct_last5",
-        "importance": 0.004085338175215614,
-        "std": 0.002768579333994898
+        "feature": "visitor_points_scored_last10",
+        "importance": 0.002257924446374271,
+        "std": 0.0019105514546244127
       },
       {
-        "feature": "visitor_point_diff_last10",
-        "importance": 0.004085338175215614,
-        "std": 0.002278692764051045
-      },
-      {
-        "feature": "visitor_points_allowed_last10",
-        "importance": 0.002905129369042214,
-        "std": 0.0013648022131977217
-      },
-      {
-        "feature": "momentum_diff_10",
-        "importance": 0.002905129369042214,
-        "std": 0.0025774070933415136
-      },
-      {
-        "feature": "visitor_win_pct_last5",
-        "importance": 0.002451202905129368,
-        "std": 0.0014239116787433605
-      },
-      {
-        "feature": "home_point_diff_last10",
-        "importance": 0.002360417612346799,
-        "std": 0.0015027639906715247
-      },
-      {
-        "feature": "visitor_win_pct_last20",
-        "importance": 0.0021788470267816605,
-        "std": 0.001955575054792375
-      },
-      {
-        "feature": "visitor_points_allowed_last20",
-        "importance": 0.0020880617339990915,
-        "std": 0.0015880940249238217
+        "feature": "visitor_points_scored_last20",
+        "importance": 0.002171081198436786,
+        "std": 0.0008238673886673983
       },
       {
         "feature": "visitor_elo",
-        "importance": 0.001906491148433953,
-        "std": 0.004232970758737999
+        "importance": 0.0009552757273121771,
+        "std": 0.002447069527330521
       },
       {
-        "feature": "h2h_avg_margin",
-        "importance": 0.0016341352700862456,
-        "std": 0.0011696866751452675
+        "feature": "home_points_scored_last10",
+        "importance": 0.0008684324793747144,
+        "std": 0.001999281707897757
+      },
+      {
+        "feature": "home_points_allowed_last20",
+        "importance": 0.0006079027355623045,
+        "std": 0.0006498753602733814
+      },
+      {
+        "feature": "visitor_points_scored_last5",
+        "importance": 0.0006079027355623045,
+        "std": 0.00138949196699958
+      },
+      {
+        "feature": "rest_advantage",
+        "importance": 0.0006079027355623045,
+        "std": 0.0007570818833766048
+      },
+      {
+        "feature": "visitor_win_pct_last5",
+        "importance": 0.00043421623968733505,
+        "std": 0.0019611966635929294
+      },
+      {
+        "feature": "home_is_b2b",
+        "importance": 0.0004342162396873128,
+        "std": 0.0
+      },
+      {
+        "feature": "visitor_point_diff_last20",
+        "importance": 0.00034737299174985025,
+        "std": 0.0010421189752496895
+      },
+      {
+        "feature": "home_win_pct_last10",
+        "importance": 0.00017368649587490292,
+        "std": 0.0010127576022310818
       }
     ],
     "metrics": {
-      "home_score_test_mae": 8.42702685036405,
-      "visitor_score_test_mae": 8.254037779626955,
-      "winner_test_accuracy": 0.6654561960962324,
-      "winner_test_brier": 0.20975884675805845,
-      "winner_test_logloss": 0.6202308792448186,
-      "winner_cv_mean_accuracy": 0.7027247956403271,
-      "winner_cv_std": 0.022578841138271036,
+      "home_score_test_mae": 8.390714968550569,
+      "visitor_score_test_mae": 8.365605004515873,
+      "winner_test_accuracy": 0.6630481980026053,
+      "winner_test_brier": 0.20957392654680543,
+      "winner_test_logloss": 0.648802495604865,
+      "winner_cv_mean_accuracy": 0.7002607561929597,
+      "winner_cv_std": 0.027519971912224505,
       "winner_cv_folds": [
-        0.6839237057220708,
-        0.6682561307901907,
-        0.717983651226158,
-        0.7268392370572208,
-        0.7166212534059946
+        0.6792698826597132,
+        0.6675358539765319,
+        0.7372881355932204,
+        0.728161668839635,
+        0.6890482398956975
       ],
-      "winner_train_accuracy": 0.8449726265188944,
-      "train_test_gap": 0.17951643042266197
+      "winner_train_accuracy": 0.8448958732592309,
+      "train_test_gap": 0.1818476752566256
     }
   }
 }
