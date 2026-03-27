@@ -22,6 +22,9 @@ import os
 import re
 import json
 
+import threading
+import time
+
 from data_manager import DataManager
 from features_enhanced import EnhancedFeatureEngineer as FeatureEngineer
 from model_engine import EliteEnsembleModel
@@ -32,6 +35,32 @@ from odds_utils import get_consensus_odds, format_american_odds, calculate_edge
 from odds_api_client import TheOddsAPIClient
 from props_aggregator import PropsAggregator, PrizePicksClient, UnderdogFantasyClient
 import team_logos
+
+
+def _background_result_updater(interval_hours: int = 4):
+    """Background thread: update pending game results every N hours."""
+    while True:
+        time.sleep(interval_hours * 3600)
+        try:
+            for gender in ("mens", "womens"):
+                tracker = PredictionTracker(gender)
+                dm = DataManager(gender)
+                updated = tracker.update_pending_games(dm)
+                if updated:
+                    print(f"[bg] Updated {updated} results for {gender}")
+        except Exception as e:
+            print(f"[bg] Result updater error: {e}")
+
+
+def _start_background_updater():
+    t = threading.Thread(target=_background_result_updater, daemon=True)
+    t.start()
+
+
+# Start once per process (not per Streamlit rerun)
+if not getattr(_start_background_updater, "_started", False):
+    _start_background_updater()
+    _start_background_updater._started = True
 import config
 
 

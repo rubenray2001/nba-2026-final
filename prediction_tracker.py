@@ -317,7 +317,7 @@ class PredictionTracker:
             if pred:
                 d_str = pred['predicted_at'][:10]
                 d_date = datetime.strptime(d_str, "%Y-%m-%d")
-                for offset in range(3):
+                for offset in range(7):
                     d = (d_date + timedelta(days=offset)).strftime("%Y-%m-%d")
                     if d > today:
                         break
