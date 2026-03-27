@@ -15,13 +15,22 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
 import streamlit as st
+import config
+
+# Page configuration - must be the very first Streamlit command
+st.set_page_config(
+    page_title=config.PAGE_TITLE,
+    page_icon=config.PAGE_ICON,
+    layout=config.LAYOUT,
+    initial_sidebar_state="expanded"
+)
+
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
 import re
 import json
-
 import threading
 import time
 
@@ -57,20 +66,9 @@ def _start_background_updater():
     t.start()
 
 
-# Start once per process (not per Streamlit rerun)
 if not getattr(_start_background_updater, "_started", False):
     _start_background_updater()
     _start_background_updater._started = True
-import config
-
-
-# Page configuration
-st.set_page_config(
-    page_title=config.PAGE_TITLE,
-    page_icon=config.PAGE_ICON,
-    layout=config.LAYOUT,
-    initial_sidebar_state="expanded"
-)
 
 
 def inject_custom_css():
