@@ -2,7 +2,7 @@
 title: Elite College Basketball Predictions
 emoji: 🏀
 colorFrom: blue
-colorTo: orange
+colorTo: red
 sdk: streamlit
 sdk_version: "1.44.0"
 app_file: app.py
