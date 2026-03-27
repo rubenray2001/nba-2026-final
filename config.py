@@ -4,15 +4,8 @@ Supports both Men's and Women's college basketball
 """
 import os
 
-# Try to import Streamlit secrets (for cloud deployment)
-try:
-    import streamlit as st
-    _secrets = st.secrets.get("api_keys", {})
-except Exception:
-    _secrets = {}
-
 # The Odds API (Primary odds source for college basketball)
-ODDS_API_KEY = _secrets.get("ODDS_API_KEY", os.environ.get("ODDS_API_KEY", "a3dd82c243fd40b0231a81777e360d83"))
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "a3dd82c243fd40b0231a81777e360d83")
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
 
 # Preferred Bookmakers (for display sorting)
