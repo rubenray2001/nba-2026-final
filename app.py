@@ -17,7 +17,15 @@ warnings.filterwarnings('ignore', category=UserWarning)
 import streamlit as st
 import config
 
-# Page configuration - must be the very first Streamlit command
+# Force-allow set_page_config in case runtime pre-initialized something
+try:
+    from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+    _ctx = get_script_run_ctx()
+    if _ctx is not None:
+        _ctx._set_page_config_allowed = True
+except Exception:
+    pass
+
 st.set_page_config(
     page_title=config.PAGE_TITLE,
     page_icon=config.PAGE_ICON,
