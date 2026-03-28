@@ -42,7 +42,12 @@ from prediction_tracker import PredictionTracker
 from training_history import TrainingHistoryTracker
 from odds_utils import get_consensus_odds, format_american_odds, calculate_edge
 from odds_api_client import TheOddsAPIClient
-from props_aggregator import PropsAggregator, PrizePicksClient, UnderdogFantasyClient
+try:
+    from props_aggregator import PropsAggregator, PrizePicksClient, UnderdogFantasyClient
+    _PROPS_AVAILABLE = True
+except ImportError:
+    _PROPS_AVAILABLE = False
+    PropsAggregator = None
 import team_logos
 
 
