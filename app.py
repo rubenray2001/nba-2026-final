@@ -2556,11 +2556,11 @@ def main():
                     tab1, tab2 = st.tabs(["Data Growth", "Accuracy"])
                     
                     with tab1:
-                        st.area_chart(df_history.set_index('Training #')[['Total Games']], color="#00F3FF", height=250, use_container_width=True)
+                        st.area_chart(df_history.set_index('Training #')[['Total Games']], color="#00F3FF", height=250, width="stretch")
                         st.caption(f"Latest: {df_history['Total Games'].iloc[-1]:,} games")
                         
                     with tab2:
-                        st.line_chart(df_history.set_index('Training #')[['Accuracy %']], color="#FF00FF", height=250, use_container_width=True)
+                        st.line_chart(df_history.set_index('Training #')[['Accuracy %']], color="#FF00FF", height=250, width="stretch")
                         st.caption(f"Latest: {df_history['Accuracy %'].iloc[-1]:.1f}%")
                 
                 # Show session summary below chart

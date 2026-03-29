@@ -12,6 +12,7 @@ import os
 import sys
 import subprocess
 import tempfile
+import threading
 from typing import List, Dict, Optional
 from datetime import datetime
 import config
@@ -89,9 +90,15 @@ class PrizePicksClient:
             return self._parse_projections(data)
         
         # Fallback 1: in-process Playwright (works from CLI)
-        data = self._fetch_with_playwright()
-        if data:
-            return self._parse_projections(data)
+        if self._can_use_inprocess_playwright():
+            data = self._fetch_with_playwright()
+            if data:
+                return self._parse_projections(data)
+        else:
+            print(
+                "PrizePicks: skipping in-process Playwright fallback "
+                "(Windows non-main thread or selector event loop)"
+            )
         
         # Fallback 2: cloudscraper (works sometimes)
         data = self._fetch_with_cloudscraper()
@@ -105,6 +112,27 @@ class PrizePicksClient:
         
         print("PrizePicks: all methods failed")
         return []
+
+    @staticmethod
+    def _can_use_inprocess_playwright() -> bool:
+        """
+        Playwright's sync API is unreliable on Windows when called from
+        Streamlit's script thread or under a selector-based asyncio policy.
+        """
+        if sys.platform != "win32":
+            return True
+
+        if threading.current_thread() is not threading.main_thread():
+            return False
+
+        try:
+            import asyncio
+
+            policy_name = type(asyncio.get_event_loop_policy()).__name__
+        except Exception:
+            return True
+
+        return policy_name != "WindowsSelectorEventLoopPolicy"
     
     def _fetch_via_subprocess(self) -> Optional[Dict]:
         """
@@ -265,7 +293,8 @@ else:
                 
                 context.close()
         except Exception as e:
-            print(f"PrizePicks Playwright error: {e}")
+            error_text = str(e).split("Browser logs:", 1)[0].strip()
+            print(f"PrizePicks Playwright error: {error_text}")
         
         return result
     
